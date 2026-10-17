@@ -107,7 +107,7 @@ test('no guard: unguarded strike costs 22 HP and stunned punches are ignored', a
   await page.keyboard.press('Space');
   await page.clock.runFor(200);
   assert.deepEqual(await hp(page), [78, 100], 'stunned punch ignored');
-  assert.equal(await page.getAttribute('#fig-player', 'data-pose'), 'stun');
+  assert.equal(await page.getAttribute('#art', 'data-player-pose'), 'stun');
   clean(g);
   await g.context.close();
 });
@@ -177,7 +177,7 @@ test('reduced motion: static payoff, same text, essential cues retained', async 
   assert.equal(await page.evaluate(() => document.getElementById('payoff').classList.contains('anim')), false);
   assert.equal(await page.isVisible('#btn-skip-anim'), false);
   assert.match(await text(page, '.stamp-line'), /BEAT THE BUZZER/);
-  assert.equal(await page.isVisible('#payoff svg'), true);
+  assert.equal(await page.isVisible('#payoff canvas'), true);
   clean(g);
   await g.context.close();
 });

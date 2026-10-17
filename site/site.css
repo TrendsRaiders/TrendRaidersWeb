@@ -50,3 +50,16 @@ main { max-width: 46rem; margin: 0 auto; padding: 0.5rem 0 2rem; }
 .btn.primary { background: var(--accent); color: #1a1400; border-color: var(--accent); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .notice, .not-found { border: 2px solid var(--line); border-radius: 0.7rem; padding: 0.75rem 1rem; background: var(--panel); }
+
+.game-nav { margin: 0.5rem 0; }
+.game-nav .gn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.gn-item { display: grid; gap: 0.2rem; align-content: start; min-width: 0; }
+.gn-item.next { text-align: right; justify-items: end; }
+.gn-link {
+  display: inline-flex; flex-direction: column; justify-content: center; min-height: 48px; min-width: 44px; max-width: 100%;
+  padding: 0.35rem 0.7rem; border: 2px solid var(--line); border-radius: 0.6rem; background: var(--panel); color: var(--fg);
+  font: inherit; font-weight: 700; text-decoration: none; text-align: inherit;
+}
+.gn-link small { display: block; font-weight: 600; color: var(--muted); }
+.gn-link:disabled { color: var(--muted); border-style: dashed; cursor: not-allowed; }
+.gn-note { color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }

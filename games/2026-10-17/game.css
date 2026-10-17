@@ -16,13 +16,22 @@ h1 { margin: 0.5rem 0 0; font-size: clamp(1.6rem, 7vw, 2.4rem); line-height: 1.1
 
 .play-region { display: grid; gap: 0.5rem; }
 .arena {
-  position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100dvh - 15rem); min-height: 130px;
-  margin: 0 auto; border: 3px solid var(--line); border-radius: 0.8rem; overflow: hidden; background: #1d2440;
-  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  position: relative; width: 100%; margin: 0 auto; border: 3px solid var(--line); border-radius: 0.5rem; overflow: hidden;
+  background: #0b0e1a; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
-.arena svg { display: block; width: 100%; height: 100%; }
-.fig { transform-box: fill-box; }
-.glove { transition: transform 0.08s linear; }
+.placard {
+  margin: 0; padding: 0.15rem 0.5rem; text-align: center; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em;
+  background: #000; color: #ffd08a; border-bottom: 2px solid var(--line);
+}
+/* The stage is sized in whole multiples of the 256x144 art grid by main.js (integer scale, letterboxed). */
+.stage { position: relative; width: 256px; height: 144px; margin: 0 auto; }
+.stage canvas { display: block; width: 100%; height: 100%; image-rendering: crisp-edges; image-rendering: pixelated; }
+.art-fallback { position: absolute; inset: 0; background: #1d2440; display: flex; align-items: flex-end; justify-content: space-between; padding: 8% 12%; }
+.art-fallback[hidden] { display: none; }
+.fb-fig { display: grid; place-items: center; width: 22%; height: 60%; font-weight: 900; font-size: 0.8rem; color: #000; border: 3px solid #fff; }
+.fb-player { background: #2f6df0; color: #fff; }
+.fb-enemy { background: #d8d8e0; }
+.app[data-art="fallback"] #art { display: none; }
 .countdown {
   position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(3rem, 22vw, 6rem);
   font-weight: 900; background: #0008; color: #fff;
@@ -40,17 +49,6 @@ h1 { margin: 0.5rem 0 0; font-size: clamp(1.6rem, 7vw, 2.4rem); line-height: 1.1
   position: absolute; left: 4%; bottom: 6%; background: #fff; color: #000; font-weight: 900; padding: 0.15rem 0.5rem;
   border-radius: 6px; border: 3px dashed #000;
 }
-/* poses: shape changes, not only color */
-#fig-enemy[data-pose="windup"] #glove-enemy { transform: translate(24px, -34px); }
-#fig-enemy[data-pose="strike"] #glove-enemy { transform: translate(-80px, 4px) scale(1.25); }
-#fig-enemy[data-pose="recovery"] #glove-enemy { transform: translate(8px, 12px); }
-#fig-player[data-pose="punch"] #glove-player { transform: translate(110px, 0) scale(1.15); }
-#fig-player[data-pose="stun"] { transform: translate(-6px, 4px) rotate(-5deg); }
-#guard-shield { opacity: 0; }
-#fig-player[data-guard="on"] #guard-shield { opacity: 1; }
-#fig-player[data-guard="on"] #glove-player { transform: translate(-6px, -30px); }
-.stool { opacity: 0; }
-
 .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .ctl {
   min-height: 72px; min-width: 56px; font: inherit; font-size: 1.25rem; font-weight: 900; color: var(--fg);
@@ -74,16 +72,10 @@ h1 { margin: 0.5rem 0 0; font-size: clamp(1.6rem, 7vw, 2.4rem); line-height: 1.1
 .headline { font-size: 1.25rem; font-weight: 800; margin: 0.2rem 0; }
 .result-time { font-size: 1.1rem; font-weight: 700; margin: 0.2rem 0; }
 .payoff { margin: 0.5rem 0; text-align: center; }
-.payoff svg { width: min(100%, 22rem); height: auto; }
+.payoff-art { display: block; margin: 0 auto; image-rendering: crisp-edges; image-rendering: pixelated; width: 128px; height: 72px; max-width: 100%; }
 .payoff[hidden] { display: none; }
 .stamp-line { margin: 0.2rem 0; font-weight: 900; font-size: 1.15rem; }
 .payoff-time { color: var(--accent); }
-.payoff.anim .stamp { animation: stamp 0.45s 0.35s both; transform-origin: 180px 60px; }
-.payoff.anim .stopwatch { animation: tick 0.9s both; transform-origin: 180px 64px; }
-.payoff.anim .stool-glove { animation: settle 0.5s both; }
-@keyframes stamp { from { opacity: 0; transform: scale(2.2); } to { opacity: 1; transform: scale(1); } }
-@keyframes tick { from { transform: rotate(-12deg) scale(0.8); } to { transform: none; } }
-@keyframes settle { from { transform: translateY(-8px); } to { transform: none; } }
 
 .news { margin-top: 1.5rem; border-top: 2px solid var(--line); padding-top: 0.5rem; }
 .news h2 { margin: 0.4rem 0; }
@@ -102,15 +94,27 @@ h1 { margin: 0.5rem 0 0; font-size: clamp(1.6rem, 7vw, 2.4rem); line-height: 1.1
 @media (max-height: 500px) and (orientation: landscape) {
   h1 { font-size: 1.2rem; display: inline-block; margin-right: 0.5rem; }
   .edition-date { display: inline-block; margin: 0; }
-  .arena { max-height: calc(100dvh - 12rem); min-height: 110px; }
   .ctl { min-height: 60px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bar-fill, .glove { transition: none; }
-  .payoff.anim .stamp, .payoff.anim .stopwatch, .payoff.anim .stool-glove { animation: none; }
+  .bar-fill { transition: none; }
 }
 @media (max-width: 360px) {
   .hud-name { font-size: 0.7rem; }
   .ctl { font-size: 1.05rem; }
 }
-.app[data-outcome="win"] .stool { opacity: 1; }
+
+.subhead { margin: 0.2rem 0 0.4rem; font-weight: 800; color: var(--accent); }
+.punchline { margin: 0.3rem 0; font-weight: 800; }
+.linkbtn { display: inline-flex; align-items: center; text-decoration: none; color: var(--fg); }
+
+.source-card { margin-top: 1rem; border: 2px solid var(--line); border-radius: 0.7rem; padding: 0.75rem; background: var(--panel); max-width: 100%; min-width: 0; }
+.source-card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
+.privacy { margin: 0 0 0.5rem; }
+.embed-area { min-height: 5rem; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.embed-summary { margin: 0 0 0.4rem; }
+.embed-status { margin: 0 0 0.4rem; font-weight: 700; }
+.embed-mount { max-width: 100%; overflow: hidden; }
+.embed-mount iframe, .embed-mount .twitter-tweet { max-width: 100% !important; }
+.embed-area[data-embed-state="loaded"] .embed-summary { display: none; }
+.embed-holder { max-width: 100%; }

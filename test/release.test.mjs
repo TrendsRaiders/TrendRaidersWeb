@@ -105,3 +105,47 @@ test('static host: direct routes, trailing-slash redirect, honest 404 for unknow
     assert.equal((await fetch(`${host.origin}/games/2026-10-17/js/main.js`)).status, 200);
   } finally { await host.close(); }
 });
+
+// ---- r4: Previous/Next from the verified released registry only ----------------------------------
+import { gameNeighbors } from '../scripts/lib/build-lib.mjs';
+const rel = (...d) => d.map((date) => ({ date, preview: false }));
+const prv = (...d) => d.map((date) => ({ date, preview: true }));
+
+test('gameNeighbors: none, current only, sparse, unrelated previews', () => {
+  assert.deepEqual(gameNeighbors([], '2026-10-17'), { prev: null, next: null });
+  assert.deepEqual(gameNeighbors(prv('2026-10-17'), '2026-10-17'), { prev: null, next: null });
+  assert.deepEqual(gameNeighbors(rel('2026-10-17'), '2026-10-17'), { prev: null, next: null }, 'current only: no self link');
+  assert.deepEqual(gameNeighbors([...rel('2026-10-03', '2026-10-10', '2026-10-24', '2026-11-30'), ...prv('2026-10-17')], '2026-10-17'),
+    { prev: '2026-10-10', next: '2026-10-24' }, 'nearest released neighbors, gaps skipped, candidate never a destination');
+  assert.deepEqual(gameNeighbors([...rel('2026-10-10'), ...prv('2026-10-12', '2026-10-17', '2026-10-20')], '2026-10-17'),
+    { prev: '2026-10-10', next: null }, 'unrelated previews are never linked');
+  assert.deepEqual(gameNeighbors(rel('2026-10-10', '2026-10-24'), '2026-10-10'), { prev: null, next: '2026-10-24' });
+  assert.deepEqual(gameNeighbors(rel('2026-10-10', '2026-10-24'), '2026-10-24'), { prev: '2026-10-10', next: null });
+});
+
+test('r4: built pages link exact neighbor routes with date text and disable genuine ends (fixtures only)', async () => {
+  for (const d of ['2026-10-10', '2026-10-24']) {
+    mkdirSync(join(gamesDir, d), { recursive: true });
+    writeFileSync(join(gamesDir, d, 'edition.json'), JSON.stringify({ date: d, title: `Fixture ${d}`, description: 'fixture' }));
+    writeFileSync(join(gamesDir, d, 'index.html'), '<!doctype html><html lang="en"><head><title>{{title}}</title></head><body>{{nav}}{{gamenav}}<main><h1>Fixture</h1></main></body></html>');
+  }
+  const previewReg = join(tmp, 'preview-sparse.json');
+  writeFileSync(previewReg, JSON.stringify({ schema: 1, editions: [{ date: '2026-10-17' }, { date: '2026-10-20' }] }));
+  mkdirSync(join(gamesDir, '2026-10-20'), { recursive: true });
+  writeFileSync(join(gamesDir, '2026-10-20', 'edition.json'), JSON.stringify({ date: '2026-10-20', title: 'Unrelated preview', description: 'x' }));
+  writeFileSync(join(gamesDir, '2026-10-20', 'index.html'), '<html><body>{{nav}}{{gamenav}}</body></html>');
+  const dist = join(tmp, 'archive-nav');
+  await build({ mode: 'preview', outDir: dist, gamesDir, releaseRegistry: registry([good('2026-10-10'), good('2026-10-24')]), previewRegistry: previewReg });
+  const cand = read(dist, 'games/2026-10-17/index.html');
+  assert.match(cand, /<a class="gn-link" href="\/games\/2026-10-10\/" data-gn="prev"><span class="gn-text"><span aria-hidden="true">←<\/span> Previous game<\/span> <small>10 Oct 2026<\/small><\/a>/);
+  assert.match(cand, /<a class="gn-link" href="\/games\/2026-10-24\/" data-gn="next"><span class="gn-text">Next game <span aria-hidden="true">→<\/span><\/span> <small>24 Oct 2026<\/small><\/a>/);
+  assert.doesNotMatch(cand, /href="\/games\/2026-10-20\/" data-gn/, 'unrelated preview is not a destination');
+  const first = read(dist, 'games/2026-10-10/index.html');
+  assert.match(first, /<button type="button" class="gn-link" disabled data-gn="prev">/);
+  assert.match(first, /No earlier released game/);
+  assert.match(first, /<a class="gn-link" href="\/games\/2026-10-24\/" data-gn="next">/, 'later released edition still reachable; candidate 17th is not');
+  const last = read(dist, 'games/2026-10-24/index.html');
+  assert.match(last, /href="\/games\/2026-10-10\/" data-gn="prev"/);
+  assert.match(last, /<button type="button" class="gn-link" disabled data-gn="next">/);
+  assert.match(last, /No later released game/);
+});

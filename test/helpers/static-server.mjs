@@ -6,7 +6,20 @@ import { join, normalize, extname } from 'node:path';
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
 
+/** Parse the `/*` block of a Netlify `_headers` file so tests run under the same headers as the host. */
+async function globalHeaders(dir) {
+  const txt = await readFile(join(dir, '_headers'), 'utf8').catch(() => '');
+  const out = {};
+  let inGlobal = false;
+  for (const line of txt.split('\n')) {
+    if (/^\S/.test(line)) inGlobal = line.trim() === '/*';
+    else if (inGlobal && line.includes(':')) { const i = line.indexOf(':'); out[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+  }
+  return out;
+}
+
 export async function serve(dir) {
+  const extra = await globalHeaders(dir);
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://x');
     const rel = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
@@ -19,11 +32,11 @@ export async function serve(dir) {
         st = await stat(file).catch(() => null);
       }
       if (!st) throw new Error('missing');
-      res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
+      res.writeHead(200, { ...extra, 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
       res.end(await readFile(file));
     } catch {
       const body = await readFile(join(dir, '404.html')).catch(() => Buffer.from('not found'));
-      res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+      res.writeHead(404, { ...extra, 'content-type': 'text/html; charset=utf-8' });
       res.end(body);
     }
   });

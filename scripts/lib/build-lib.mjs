@@ -35,6 +35,56 @@ export function validateReleaseRegistry(reg) {
 
 async function readJson(path) { return JSON.parse(await readFile(path, 'utf8')); }
 
+/**
+ * Content Security Policy for every page. Derived from the actual provider behavior (see docs/thirty-second-ko.md):
+ * the click-to-load X embed needs scripts and frames from platform.twitter.com only. No 'unsafe-inline',
+ * no wildcards. widgets.js's own inline CSP self-test <style> is intentionally left blocked (render still works).
+ */
+export const CSP_DIRECTIVES = [
+  "default-src 'self'",
+  "script-src 'self' https://platform.twitter.com",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  'frame-src https://platform.twitter.com',
+  "media-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+];
+export const CSP = CSP_DIRECTIVES.join('; ');
+const cspMeta = () => `<meta http-equiv="Content-Security-Policy" content="${esc(CSP)}">`;
+const HEADERS_FILE = `/*\n  Content-Security-Policy: ${CSP}; frame-ancestors 'none'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
+
+const longDate = (date) => shortDate(date);
+
+/**
+ * Previous/Next from verified RELEASED editions only (strictly earlier / later by UTC date). The selected
+ * edition, even a preview candidate, only anchors the comparison and is never a destination.
+ */
+export function gameNeighbors(entries, currentDate) {
+  const released = entries.filter((e) => !e.preview).map((e) => e.date).sort();
+  const prev = released.filter((d) => d < currentDate).pop() ?? null;
+  const next = released.find((d) => d > currentDate) ?? null;
+  return { prev, next };
+}
+
+function renderGameNav(entries, currentDate) {
+  const { prev, next } = gameNeighbors(entries, currentDate);
+  const item = (kind, date) => {
+    const arrow = kind === 'prev' ? '←' : '→';
+    const label = kind === 'prev' ? 'Previous game' : 'Next game';
+    const text = kind === 'prev' ? `<span aria-hidden="true">${arrow}</span> ${label}` : `${label} <span aria-hidden="true">${arrow}</span>`;
+    if (date) {
+      return `<div class="gn-item ${kind}"><a class="gn-link" href="/games/${date}/" data-gn="${kind}"><span class="gn-text">${text}</span> <small>${esc(longDate(date))}</small></a></div>`;
+    }
+    const note = kind === 'prev' ? 'No earlier released game' : 'No later released game';
+    return `<div class="gn-item ${kind}"><button type="button" class="gn-link" disabled data-gn="${kind}"><span class="gn-text">${text}</span></button><span class="gn-note">${note}</span></div>`;
+  };
+  return `<nav class="game-nav" aria-label="Game navigation"><div class="gn-row">${item('prev', prev)}${item('next', next)}</div></nav>`;
+}
+
 function renderNav(entries, currentDate) {
   const items = entries.length
     ? entries.map((e) => {
@@ -58,7 +108,7 @@ function notFoundPage(entries, mode) {
     : '<p>No game editions are released yet.</p>';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Not found | Trend Raiders</title><meta name="robots" content="noindex">
+<title>Not found | Trend Raiders</title>${cspMeta()}<meta name="robots" content="noindex">
 <link rel="icon" href="data:,"><link rel="stylesheet" href="/assets/site.css"></head>
 <body>${mode === 'preview' ? '<p class="preview-banner">Preview — not released</p>' : ''}${renderNav(entries, null)}
 <main id="main"><div class="not-found"><h1>Page not found</h1><p>There is no game edition at this address.</p>${list}<p><a href="/">Go to the home page</a></p></div></main></body></html>
@@ -152,6 +202,8 @@ export async function build(o = {}) {
       robots: entry.preview ? '<meta name="robots" content="noindex">' : '',
       banner: entry.preview ? '<p class="preview-banner" role="note">Preview — not released</p>' : '',
       nav: renderNav(entries, entry.date),
+      gamenav: renderGameNav(entries, entry.date),
+      csp: cspMeta(),
       config,
     });
     pages.set(entry.date, html);
@@ -168,6 +220,7 @@ export async function build(o = {}) {
     rootKind = rootEntry.preview ? 'preview-candidate' : 'latest-released';
   }
   await writeFile(join(outDir, '404.html'), notFoundPage(entries, mode));
+  await writeFile(join(outDir, '_headers'), HEADERS_FILE);
 
   return writeManifest(outDir, {
     mode,

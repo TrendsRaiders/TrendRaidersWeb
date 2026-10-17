@@ -1,22 +1,39 @@
 import { chromium } from 'playwright-core';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, cpSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { build } from '../../scripts/lib/build-lib.mjs';
+import { build, ROOT } from '../../scripts/lib/build-lib.mjs';
 import { serve } from '../helpers/static-server.mjs';
 
 export const GAME = '/games/2026-10-17/';
 export const CHROMIUM = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
 
-/** Builds the preview site (and an optional fixture-released variant) and starts a browser. */
-export async function setup({ released = false } = {}) {
+/**
+ * Builds the preview site and starts a browser.
+ * released: put the real candidate in a FIXTURE release registry (share-link tests).
+ * fixture: { release: [dates], preview: [dates], stubs: [dates] } builds isolated, non-public neighbor editions
+ *   (stub pages) next to the real candidate. Nothing here is ever a real release.
+ */
+export async function setup({ released = false, fixture = null } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'tr-browser-'));
   const regPath = join(tmp, 'registry.json');
-  const editions = released
-    ? [{ date: '2026-10-17', verified: true, sha: 'abc1234', origin: 'https://games.example.test', verification: 'fixture-only (browser test)' }]
-    : [];
-  (await import('node:fs')).writeFileSync(regPath, JSON.stringify({ schema: 1, editions }));
-  await build({ mode: 'preview', outDir: join(tmp, 'dist'), releaseRegistry: regPath });
+  const entry = (date) => ({ date, verified: true, sha: 'abc1234', origin: 'https://games.example.test', verification: 'fixture-only (browser test)' });
+  const releaseDates = fixture ? fixture.release : released ? ['2026-10-17'] : [];
+  writeFileSync(regPath, JSON.stringify({ schema: 1, editions: releaseDates.map(entry) }));
+  const opts = { mode: /** @type {'preview'} */ ('preview'), outDir: join(tmp, 'dist'), releaseRegistry: regPath };
+  if (fixture) {
+    const gamesDir = join(tmp, 'games');
+    cpSync(join(ROOT, 'games'), gamesDir, { recursive: true });
+    for (const d of [...fixture.stubs, ...fixture.preview.filter((x) => x !== '2026-10-17')]) {
+      mkdirSync(join(gamesDir, d), { recursive: true });
+      writeFileSync(join(gamesDir, d, 'edition.json'), JSON.stringify({ date: d, title: `Fixture ${d}`, description: 'fixture only' }));
+      writeFileSync(join(gamesDir, d, 'index.html'), '<!doctype html><html lang="en"><head><meta charset="utf-8">{{csp}}<title>{{title}}</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/assets/site.css"></head><body>{{banner}}{{nav}}<main id="main"><h1>Fixture edition {{title}}</h1>{{gamenav}}</main></body></html>');
+    }
+    const previewPath = join(tmp, 'preview.json');
+    writeFileSync(previewPath, JSON.stringify({ schema: 1, editions: fixture.preview.map((date) => ({ date })) }));
+    Object.assign(opts, { gamesDir, previewRegistry: previewPath });
+  }
+  await build(opts);
   const host = await serve(join(tmp, 'dist'));
   const browser = await chromium.launch({ executablePath: CHROMIUM, args: ['--no-sandbox'] });
   return {
@@ -65,3 +82,10 @@ export async function playToWin(page) {
 }
 
 export const inside = (page, sel) => page.evaluate((s) => !!document.activeElement && !!document.querySelector(s)?.contains(document.activeElement), sel);
+
+/** Poll from Node with real time (page timers may be on a fake clock). */
+export async function until(fn, timeout = 8000, step = 25) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) { if (await fn()) return true; await new Promise((r) => setTimeout(r, step)); }
+  return false;
+}

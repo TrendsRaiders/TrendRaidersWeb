@@ -2,6 +2,8 @@
 import { Sim, formatHundredths } from './engine.js';
 import { ModalStack } from './modal.js';
 import { buildShareText, shareResult } from './share.js';
+import { renderArena, renderPayoff, ARENA_W, ARENA_H, PAYOFF_W, PAYOFF_H } from './art.js';
+import { createEmbed } from './embed.js';
 
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const config = JSON.parse($('site-config').textContent || '{}');
@@ -43,16 +45,76 @@ const modals = new ModalStack({
   onChange: () => clearInputs(),
 });
 
+// ---- pixel art ----------------------------------------------------------------------------
+const artCanvas = /** @type {HTMLCanvasElement} */ ($('art'));
+const stage = $('stage');
+/** @type {CanvasRenderingContext2D|null} */
+let artCtx = null;
+try { artCtx = artCanvas.getContext('2d'); } catch { artCtx = null; }
+if (!artCtx) app.dataset.art = 'fallback'; // simple-shape fallback; cues and controls stay intact
+const fallbackEl = $('art-fallback');
+fallbackEl.hidden = !!artCtx;
+let artKey = '';
+let payoffTimers = [];
+
+function paint(canvas, frame) {
+  const ctx = canvas.getContext('2d');
+  if (ctx) ctx.putImageData(new ImageData(frame.data, frame.w, frame.h), 0, 0);
+}
+/** Largest whole-number scale that fits the arena width (and, on short screens, the height). */
+function fitStage() {
+  const w = arena.clientWidth || ARENA_W;
+  const maxH = Math.max(ARENA_H, window.innerHeight - 300);
+  const scale = Math.max(1, Math.min(Math.floor(w / ARENA_W), Math.floor(maxH / ARENA_H)));
+  stage.style.width = `${ARENA_W * scale}px`;
+  stage.style.height = `${ARENA_H * scale}px`;
+  stage.dataset.scale = String(scale);
+}
+function fitPayoff() {
+  const w = $('payoff').clientWidth || PAYOFF_W;
+  const scale = Math.max(1, Math.min(3, Math.floor(w / PAYOFF_W)));
+  const c = $('payoff-art');
+  c.style.width = `${PAYOFF_W * scale}px`;
+  c.style.height = `${PAYOFF_H * scale}px`;
+  c.dataset.scale = String(scale);
+}
+function playerPose(t) {
+  if (sim.stunned(t)) return 'stun';
+  if (sim.actionActive(t) && sim.action) {
+    const e = t - sim.action.start;
+    return e < 100 ? 'startup' : e < 250 ? 'punch' : 'recover';
+  }
+  return sim.guardEffective(t) ? 'guard' : 'idle';
+}
+function drawArena(t) {
+  const view = {
+    player: playerPose(t),
+    enemy: sim.aiView(t).phase,
+    guard: sim.guardEffective(t),
+    counter: sim.counterOpen(t),
+    bob: !reduceMotion() && state === 'playing' ? Math.floor(performance.now() / 500) % 2 : 0,
+    win: sim.result?.outcome === 'win',
+  };
+  artCanvas.dataset.playerPose = view.player;
+  artCanvas.dataset.enemyPose = view.enemy;
+  artCanvas.dataset.guard = view.guard ? 'on' : 'off';
+  if (!artCtx) {
+    $('fb-player').dataset.pose = view.player;
+    $('fb-enemy').dataset.pose = view.enemy;
+    return;
+  }
+  const key = `${view.player}|${view.enemy}|${view.guard}|${view.counter}|${view.bob}|${view.win}`;
+  if (key === artKey) return;
+  artKey = key;
+  paint(artCanvas, renderArena(/** @type {any} */ (view)));
+}
+function drawPayoff(stageNo) { paint(/** @type {HTMLCanvasElement} */ ($('payoff-art')), renderPayoff(stageNo)); }
+function clearPayoffTimers() { payoffTimers.forEach((id) => clearTimeout(id)); payoffTimers = []; }
+
 // ---- helpers ----------------------------------------------------------------------------
 function setText(el, v) {
   const s = String(v);
   if (cache.get(el) !== s) { cache.set(el, s); el.textContent = s; }
-}
-function setAttr(el, name, v) {
-  const s = String(v);
-  const k = `${name}`;
-  const key = el.id + ':' + k;
-  if (cache.get(key) !== s) { cache.set(key, s); el.setAttribute(name, s); }
 }
 let liveFlip = false;
 function announce(msg) {
@@ -169,6 +231,8 @@ function bindControls() {
 
 // ---- game flow --------------------------------------------------------------------------
 function newGame() {
+  clearPayoffTimers();
+  artKey = '';
   sim = new Sim();
   eventCursor = 0;
   clock = { base: 0, since: 0, running: false };
@@ -291,14 +355,11 @@ function render() {
   setText($('time-left'), sim.remainingSeconds);
   const t = sim.now;
   const view = sim.aiView(t);
-  setAttr($('fig-enemy'), 'data-pose', view.phase);
   const wind = view.phase === 'windup';
   $('windup-wrap').hidden = !wind;
   if (wind) $('windup-fill').style.transform = `scaleX(${view.progress.toFixed(3)})`;
   $('counter-badge').hidden = !sim.counterOpen(t);
-  const fig = $('fig-player');
-  setAttr(fig, 'data-pose', sim.actionActive(t) ? 'punch' : sim.stunned(t) ? 'stun' : 'idle');
-  setAttr(fig, 'data-guard', sim.guardEffective(t) ? 'on' : 'off');
+  drawArena(t);
   if (cueUntil && performance.now() > cueUntil) { cueUntil = 0; setText($('cue'), ''); }
 }
 
@@ -360,10 +421,14 @@ function finish() {
   skip.hidden = true;
   if (r.outcome === 'win') {
     setText($('payoff-time'), `${timeText}s`);
-    if (!reduceMotion()) {
+    fitPayoff();
+    if (reduceMotion()) drawPayoff(3);
+    else {
       payoff.classList.add('anim');
       skip.hidden = false;
-      setTimeout(() => endPayoffAnim(), 1100);
+      drawPayoff(0);
+      [[330, 1], [660, 2], [900, 3]].forEach(([ms, n]) => payoffTimers.push(setTimeout(() => drawPayoff(n), ms)));
+      payoffTimers.push(setTimeout(() => endPayoffAnim(), 1100));
     }
   }
   const best = $('result-best');
@@ -382,6 +447,8 @@ function finish() {
 }
 
 function endPayoffAnim() {
+  clearPayoffTimers();
+  drawPayoff(3);
   const payoff = $('payoff');
   const skip = $('btn-skip-anim');
   payoff.classList.remove('anim');
@@ -452,6 +519,13 @@ function init() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
   window.addEventListener('pagehide', () => { clearInputs(); stopRun(); });
   window.addEventListener('pageshow', (e) => { if (e.persisted) goIntro(); });
+
+  fitStage();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(() => { fitStage(); if ($('payoff').clientWidth) fitPayoff(); }).observe(arena);
+  window.addEventListener('resize', () => { fitStage(); fitPayoff(); });
+
+  const embed = createEmbed({ area: $('embed-area'), status: $('embed-status'), mount: $('embed-mount'), button: $('btn-load-embed') });
+  $('btn-load-embed').addEventListener('click', () => embed.load());
 
   newGame();
   setState('intro');

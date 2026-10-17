@@ -39,6 +39,7 @@ Every field is validated; an incomplete entry or one without source in `games/<d
 ```sh
 npm run check         # tsc --checkJs over games/**/js and scripts, plus the CSS contrast check
 npm test              # node:test: combat engine (fake clock), build/registry/routing/manifest, release fixtures
+npm run check:embed-real  # network: real X provider under the production CSP (add `-- --url <origin>` for a hosted preview); not in test:all
 npm run test:browser  # real Chromium via playwright-core (default /usr/bin/chromium; override with CHROMIUM_PATH)
 npm run test:all      # all of the above
 ```

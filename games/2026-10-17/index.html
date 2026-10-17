@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  {{csp}}
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{title}}</title>
   <meta name="description" content="{{description}}">
@@ -20,6 +21,8 @@
   <main id="main">
     <h1 id="game-title">30-Second KO</h1>
     <p class="edition-date">Edition date: <time datetime="2026-10-17">17 October 2026 (UTC)</time></p>
+
+    {{gamenav}}
 
     <section id="game" aria-labelledby="game-title">
       <noscript><p class="notice">30-Second KO needs JavaScript. The news recap below is readable without it.</p></noscript>
@@ -47,43 +50,19 @@
         <div id="play-region" class="play-region" role="group" aria-label="Play controls: arena, Punch and Guard">
           <div id="arena" class="arena" tabindex="0" role="group"
                aria-label="Boxing arena. Space or J to punch, K or Shift to guard, Escape to pause.">
-            <svg id="art" viewBox="0 0 320 180" role="img" aria-label="Cartoon ring: you on the left, Jack on the right" focusable="false">
-              <rect width="320" height="180" fill="#1d2440"/>
-              <rect y="132" width="320" height="48" fill="#3a2f4d"/>
-              <g stroke="#e8e8f2" stroke-width="3" fill="none"><path d="M0 40H320M0 66H320M0 92H320"/></g>
-              <g stroke="#ffb454" stroke-width="5"><path d="M10 30V140M310 30V140"/></g>
-              <!-- player -->
-              <g id="fig-player" class="fig">
-                <ellipse cx="80" cy="132" rx="26" ry="5" fill="#00000055"/>
-                <rect x="62" y="112" width="36" height="22" rx="4" fill="#2f6df0"/>
-                <rect x="64" y="70" width="32" height="44" rx="10" fill="#f2c9a0"/>
-                <circle cx="80" cy="56" r="17" fill="#f2c9a0"/>
-                <path d="M63 52a17 17 0 0 1 34 0z" fill="#3b2a20"/>
-                <circle cx="88" cy="58" r="2.2" fill="#222"/>
-                <g id="glove-player" class="glove"><circle cx="100" cy="86" r="11" fill="#e8403a"/><rect x="92" y="94" width="10" height="8" rx="2" fill="#fff"/></g>
-                <g id="glove-player-back" class="glove-back"><circle cx="66" cy="90" r="9" fill="#c43530"/></g>
-                <path id="guard-shield" d="M96 56q14 16 0 40" stroke="#7bd88f" stroke-width="5" fill="none" stroke-dasharray="6 4"/>
-              </g>
-              <!-- enemy -->
-              <g id="fig-enemy" class="fig">
-                <ellipse cx="240" cy="132" rx="26" ry="5" fill="#00000055"/>
-                <rect x="222" y="112" width="36" height="22" rx="4" fill="#111"/>
-                <rect x="224" y="70" width="32" height="44" rx="10" fill="#d9a77a"/>
-                <circle cx="240" cy="56" r="17" fill="#d9a77a"/>
-                <path d="M223 50a17 15 0 0 1 34 0l-6 4h-22z" fill="#d8d8e0"/>
-                <circle cx="232" cy="58" r="2.2" fill="#222"/>
-                <path d="M232 66q5 3 10 0" stroke="#222" stroke-width="1.6" fill="none"/>
-                <g id="glove-enemy" class="glove"><circle cx="220" cy="86" r="11" fill="#f2f2f5"/><rect x="218" y="94" width="10" height="8" rx="2" fill="#999"/></g>
-                <g class="glove-back"><circle cx="254" cy="90" r="9" fill="#cfcfd8"/></g>
-                <g id="stool" class="stool"><rect x="196" y="118" width="22" height="5" fill="#a0693a"/><path d="M200 123l-3 12M214 123l3 12" stroke="#a0693a" stroke-width="3"/></g>
-              </g>
-            </svg>
+            <p id="placard" class="placard">30-SECOND HEADLINE CHALLENGE</p>
+            <div id="stage" class="stage">
+              <canvas id="art" width="256" height="144" role="img" aria-label="Pixel-art ring: you on the left, Jack on the right" data-player-pose="idle" data-enemy-pose="idle" data-guard="off"></canvas>
+              <div id="art-fallback" class="art-fallback" hidden aria-hidden="true">
+                <span class="fb-fig fb-player" id="fb-player">YOU</span><span class="fb-fig fb-enemy" id="fb-enemy">JACK</span>
+              </div>
             <div id="countdown" class="countdown" hidden aria-hidden="true"></div>
             <div id="cue" class="cue" aria-hidden="true"></div>
             <div id="windup-wrap" class="windup-wrap" hidden aria-hidden="true">
               <span class="windup-label">WIND-UP</span><div class="windup-bar"><div id="windup-fill"></div></div>
             </div>
             <div id="counter-badge" class="counter-badge" hidden aria-hidden="true">COUNTER NOW!</div>
+            </div>
           </div>
 
           <div id="controls" class="controls">
@@ -98,6 +77,7 @@
 
         <section id="panel-intro" class="panel" aria-labelledby="intro-heading">
           <h2 id="intro-heading" tabindex="-1">Beat Jack inside 30 seconds</h2>
+          <p class="subhead">The headline lasted 30 seconds. Your rematch gets 30.</p>
           <p class="instructions">Hold Guard for the wind-up. After the hit, tap Punch to counter. KO before 30 seconds!</p>
           <p class="fine">Unofficial creator-boxing parody. Original fictionalized characters; not affiliated with or endorsed by any person or event.</p>
           <div class="row">
@@ -110,18 +90,9 @@
           <h2 id="result-heading" tabindex="-1">Result</h2>
           <p id="result-headline" class="headline"></p>
           <div id="payoff" class="payoff" hidden>
-            <svg viewBox="0 0 260 120" role="img" aria-label="A cartoon stopwatch stamps BEAT THE BUZZER next to your KO time while the fighter's gloves rest on a stool." focusable="false">
-              <rect x="6" y="84" width="96" height="8" fill="#a0693a"/><path d="M18 92l-6 24M90 92l6 24" stroke="#a0693a" stroke-width="6"/>
-              <circle cx="40" cy="70" r="14" fill="#f2f2f5"/><circle cx="68" cy="70" r="14" fill="#f2f2f5"/>
-              <g class="stopwatch">
-                <rect x="170" y="8" width="20" height="8" rx="2" fill="#ffb454"/>
-                <circle cx="180" cy="64" r="44" fill="#fff6e0" stroke="#ffb454" stroke-width="8"/>
-                <path d="M180 64V34M180 64l18 10" stroke="#222" stroke-width="5" stroke-linecap="round"/>
-              </g>
-              <g class="stamp"><rect x="104" y="44" width="150" height="30" rx="5" fill="#d62f4b" transform="rotate(-8 180 60)"/>
-              <text x="180" y="65" text-anchor="middle" font-size="16" font-weight="800" fill="#fff" transform="rotate(-8 180 60)" font-family="system-ui, sans-serif">BEAT THE BUZZER</text></g>
-            </svg>
+            <canvas id="payoff-art" class="payoff-art" width="128" height="72" role="img" aria-label="Pixel-art stool with Jack's gloves resting on it beside a big stopwatch stamped BEAT THE BUZZER."></canvas>
             <p class="stamp-line"><span class="stamp-text">BEAT THE BUZZER</span> <span id="payoff-time" class="payoff-time"></span></p>
+            <p class="punchline">Headline speedrun complete. The timeline can wait.</p>
             <button type="button" id="btn-skip-anim" class="btn small">Skip animation</button>
           </div>
           <p id="result-time" class="result-time"></p>
@@ -143,6 +114,20 @@
       <p class="news-date"><strong>News/source date: 17 October 2026 (UTC)</strong></p>
       <p class="news-body">FearedBuck reported on 17 October 2026 that Jack Doherty knocked out one of the Island Boys within the first 30 seconds at Brand Risk 16. That report inspired this game's 30-second first-to-KO challenge, but the cartoon duel, guard/counter rules and outcomes are fictional—not a reconstruction of the bout. The result has not been independently verified by this studio, and this unofficial parody implies no affiliation or endorsement.</p>
       <p>Source: <a href="https://twitter.com/FearedBuck/status/2111278238253342868" rel="noopener noreferrer">FearedBuck reporting, 17 October 2026</a> (posted <time datetime="2026-10-17T02:08:52Z">2026-10-17 02:08:52 UTC</time>).</p>
+
+      <section id="source-post" class="source-card" aria-labelledby="source-post-heading">
+        <h3 id="source-post-heading">Source post — FearedBuck</h3>
+        <p class="privacy">Loading this post connects to X, which may use cookies or other identifiers. You can read the source without loading the embed.</p>
+        <div id="embed-area" class="embed-area" data-embed-state="idle">
+          <p id="embed-summary" class="embed-summary">Source summary: FearedBuck reported a Jack Doherty knockout within the first 30 seconds at Brand Risk 16. Posted 17 October 2026, 02:08:52 UTC. This summary is not the embedded post.</p>
+          <p id="embed-status" class="embed-status" role="status"></p>
+          <div id="embed-mount" class="embed-mount"></div>
+        </div>
+        <div class="row">
+          <button type="button" id="btn-load-embed" class="btn">Load source post from X</button>
+          <a id="link-open-x" class="btn linkbtn" href="https://twitter.com/FearedBuck/status/2111278238253342868" rel="noopener noreferrer">Open source post on X</a>
+        </div>
+      </section>
     </section>
   </main>
 </div>

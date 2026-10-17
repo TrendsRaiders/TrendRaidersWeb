@@ -104,7 +104,7 @@ test('hosting env such as Netlify URL never creates a release or share link', as
 
 test('npm run build CLI works and both builds leave dist/ untracked output only', () => {
   execFileSync(process.execPath, [join(root, 'scripts', 'build.mjs')], { stdio: 'pipe' });
-  assert.deepEqual(readdirSync(join(root, 'dist')).sort(), ['404.html', 'assets', 'build-manifest.json', 'index.html', 'styles.css']);
+  assert.deepEqual(readdirSync(join(root, 'dist')).sort(), ['404.html', '_headers', 'assets', 'build-manifest.json', 'index.html', 'styles.css']);
 });
 
 test('netlify config builds to dist without production settings or redirects that alias dates', () => {
@@ -145,4 +145,62 @@ test('gitSource outside a repository reports unknown, uncommitted', async () => 
 
 test('package is type: module', () => {
   assert.equal(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).type, 'module');
+});
+
+test('r4: CSP is narrow (no unsafe-inline/eval, no wildcards) and only the X widget host is allowed', async () => {
+  const { CSP, CSP_DIRECTIVES } = await import('../scripts/lib/build-lib.mjs');
+  assert.doesNotMatch(CSP, /unsafe-|\*|http:/);
+  assert.deepEqual(CSP_DIRECTIVES.filter((d) => d.includes('data:')), ["img-src 'self' data:"], 'data: only for images (inline favicon)');
+  const hosts = new Set(CSP.match(/https:\/\/[a-z0-9.-]+/g));
+  assert.deepEqual([...hosts], ['https://platform.twitter.com']);
+  for (const need of ["default-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'none'", "media-src 'none'"]) assert.ok(CSP_DIRECTIVES.includes(need), need);
+  assert.ok(/script-src 'self' https:\/\/platform\.twitter\.com(;|$)/.test(CSP));
+  assert.ok(/frame-src https:\/\/platform\.twitter\.com(;|$)/.test(CSP));
+  for (const mode of ['public', 'preview']) {
+    const headers = read(out(mode), '_headers');
+    assert.ok(headers.includes(`Content-Security-Policy: ${CSP}; frame-ancestors 'none'`), mode);
+    assert.match(headers, /X-Content-Type-Options: nosniff/);
+    const html = read(out(mode), '404.html');
+    assert.ok(html.includes('http-equiv="Content-Security-Policy"'));
+  }
+  const game = read(out('preview'), 'games/2026-10-17/index.html');
+  assert.ok(game.includes('http-equiv="Content-Security-Policy"'));
+  assert.ok(game.indexOf('Content-Security-Policy') < game.indexOf('<script'), 'policy precedes every script');
+});
+
+test('r4: no X/provider script, iframe, preconnect or prefetch exists in the initial HTML', () => {
+  const game = read(out('preview'), 'games/2026-10-17/index.html');
+  const withoutCsp = game.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
+  assert.doesNotMatch(withoutCsp, /<script[^>]+src=["']https?:/i);
+  assert.doesNotMatch(withoutCsp, /<iframe|rel=["'](preconnect|dns-prefetch|preload|prefetch)["']|platform\.twitter\.com|widgets\.js|syndication/i);
+  // the only external references are ordinary anchor links
+  assert.deepEqual([...game.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]).sort(), [
+    'https://twitter.com/FearedBuck/status/2111278238253342868',
+    'https://twitter.com/FearedBuck/status/2111278238253342868',
+  ]);
+});
+
+test('r4: copy — intro subheading, placard, payoff punchline, embed card text and links are exact', () => {
+  const game = read(out('preview'), 'games/2026-10-17/index.html');
+  for (const t of [
+    'The headline lasted 30 seconds. Your rematch gets 30.',
+    '30-SECOND HEADLINE CHALLENGE',
+    'Headline speedrun complete. The timeline can wait.',
+    'Source post — FearedBuck',
+    'Loading this post connects to X, which may use cookies or other identifiers. You can read the source without loading the embed.',
+    'Source summary: FearedBuck reported a Jack Doherty knockout within the first 30 seconds at Brand Risk 16. Posted 17 October 2026, 02:08:52 UTC. This summary is not the embedded post.',
+    'Load source post from X',
+    'Open source post on X',
+    'Hold Guard for the wind-up. After the hit, tap Punch to counter. KO before 30 seconds!',
+  ]) assert.ok(game.includes(t), t);
+});
+
+test('r4: real (empty) registry gives the preview candidate two genuinely disabled ends', () => {
+  const game = read(out('preview'), 'games/2026-10-17/index.html');
+  assert.match(game, /<nav class="game-nav" aria-label="Game navigation">/);
+  assert.equal((game.match(/<button type="button" class="gn-link" disabled/g) || []).length, 2);
+  assert.doesNotMatch(game, /<a class="gn-link"/);
+  assert.ok(game.includes('No earlier released game') && game.includes('No later released game'));
+  assert.ok(game.indexOf('game-nav') < game.indexOf('id="game"'), 'above the arena');
+  assert.doesNotMatch(read(out('public'), 'index.html'), /game-nav/);
 });

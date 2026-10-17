@@ -10,7 +10,8 @@
     "test:browser": "node --test --test-concurrency=1 \"test/browser/*.test.mjs\"",
     "check": "tsc -p tsconfig.json && node scripts/check-contrast.mjs",
     "test:all": "npm run check && npm test && npm run test:browser",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:embed-real": "node scripts/real-embed-check.mjs"
   },
   "engines": {
     "node": ">=20"
