@@ -1,0 +1,11 @@
+{
+  "name": "trendraidersweb",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trend Raiders web scaffold",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "engines": { "node": ">=20" }
+}
