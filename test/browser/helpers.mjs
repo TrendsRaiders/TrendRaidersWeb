@@ -43,18 +43,52 @@ export async function setup({ released = false, fixture = null } = {}) {
   };
 }
 
-/** New page on a fake clock; collects console errors and failed requests. */
-export async function openGame(env, { viewport = { width: 390, height: 800 }, route = GAME, reducedMotion = 'no-preference', touch = false, init } = {}) {
+/**
+ * Mock of the official widgets.js, served through request interception so tests are hermetic and never touch X.
+ * The mode is read per request, so a test can switch it before an explicit retry. Real-provider behavior is covered
+ * separately by scripts/real-embed-check.mjs; mocks only prove our integration/fallback logic.
+ */
+export async function mockProvider(context, initial = 'success') {
+  const ctl = { mode: initial, scriptRequests: 0 };
+  await context.route('https://platform.twitter.com/**', async (route) => {
+    ctl.scriptRequests += 1;
+    if (ctl.mode === 'blocked') return route.abort('blockedbyclient');
+    if (ctl.mode === 'offline') return route.abort('internetdisconnected');
+    const body = `window.__tw = { calls: [] };
+      window.twttr = { ready: (cb) => cb(), widgets: { createTweet: (id, el, opts) => {
+        window.__tw.calls.push({ id, opts });
+        const mode = ${JSON.stringify(ctl.mode)};
+        if (mode === 'undefined') return Promise.resolve(undefined);
+        if (mode === 'reject') return Promise.reject(new Error('mock'));
+        if (mode === 'never') return new Promise(() => {});
+        if (mode === 'deferred') { // settled by the test, one call at a time, so retries can race
+          window.__settle = window.__settle || [];
+          return new Promise((res, rej) => { window.__settle[window.__tw.calls.length - 1] = (kind) => {
+            if (kind === 'ok') { const f = document.createElement('iframe'); f.title = 'mock post ' + window.__tw.calls.length; f.width = '300'; f.height = '200'; el.appendChild(f); res(f); }
+            else if (kind === 'undefined') res(undefined); else rej(new Error('mock late failure'));
+          }; });
+        }
+        const f = document.createElement('iframe'); f.title = 'mock official post'; f.width = '900'; f.height = '240';
+        el.appendChild(f); return Promise.resolve(f);
+      } } };`;
+    return route.fulfill({ contentType: 'text/javascript', body });
+  });
+  return ctl;
+}
+
+/** New page on a fake clock; collects console errors and failed requests. provider: mock mode, or 'real' for no interception. */
+export async function openGame(env, { viewport = { width: 390, height: 800 }, route = GAME, reducedMotion = 'no-preference', touch = false, init, provider = 'success' } = {}) {
   const context = await env.browser.newContext({ viewport, reducedMotion: /** @type {any} */ (reducedMotion), hasTouch: touch });
   const page = await context.newPage();
   const problems = [];
   page.on('console', (m) => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()}`));
+  const providerCtl = provider === 'real' ? null : await mockProvider(context, provider);
   if (init) await page.addInitScript(init);
   await page.clock.install();
   await page.goto(env.host.origin + route);
-  return { page, context, problems };
+  return { page, context, problems, provider: providerCtl };
 }
 
 export const state = (page) => page.getAttribute('#app', 'data-state');

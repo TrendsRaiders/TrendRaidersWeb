@@ -24,61 +24,68 @@
 
     {{gamenav}}
 
-    <section id="game" aria-labelledby="game-title">
+    <section id="game" class="play-panel" aria-labelledby="game-title">
       <noscript><p class="notice">30-Second KO needs JavaScript. The news recap below is readable without it.</p></noscript>
-      <div class="toolbar">
-        <button type="button" id="btn-pause" class="btn small" disabled>Pause</button>
-        <button type="button" id="btn-about" class="btn small">About</button>
-        <button type="button" id="btn-sound" class="btn small" aria-pressed="false">Sound: off</button>
+      <div class="panel-head">
+        <p class="panel-date" id="panel-date"><time datetime="2026-10-17">17 Oct 2026</time></p>
+        <div class="panel-tools">
+          <button type="button" id="btn-pause" class="btn small" disabled>Pause</button>
+          <button type="button" id="btn-about" class="btn small">About</button>
+          <button type="button" id="btn-sound" class="btn small" aria-pressed="false">Sound: off</button>
+        </div>
       </div>
 
       <div id="app" class="app" data-state="intro" data-punch-requests="0">
         <div class="hud" id="hud">
           <div class="hud-side">
             <span class="hud-name">You</span>
-            <span class="hp-num" id="hp-player"><span class="sr-only">health </span>100</span>
-            <div class="bar" aria-hidden="true"><div class="bar-fill player" id="bar-player"></div></div>
+            <div class="hud-row"><span class="hp-num" id="hp-player"><span class="sr-only">health </span>100</span>
+            <div class="bar" aria-hidden="true"><div class="bar-fill player" id="bar-player"></div></div></div>
           </div>
           <div class="hud-time"><span class="sr-only">Time left </span><span id="time-left">30</span><span aria-hidden="true">s</span></div>
           <div class="hud-side right">
             <span class="hud-name">Jack (parody)</span>
-            <span class="hp-num" id="hp-enemy"><span class="sr-only">health </span>100</span>
-            <div class="bar" aria-hidden="true"><div class="bar-fill enemy" id="bar-enemy"></div></div>
+            <div class="hud-row"><span class="hp-num" id="hp-enemy"><span class="sr-only">health </span>100</span>
+            <div class="bar" aria-hidden="true"><div class="bar-fill enemy" id="bar-enemy"></div></div></div>
           </div>
         </div>
 
         <div id="play-region" class="play-region" role="group" aria-label="Play controls: arena, Punch and Guard">
           <div id="arena" class="arena" tabindex="0" role="group"
                aria-label="Boxing arena. Space or J to punch, K or Shift to guard, Escape to pause.">
-            <p id="placard" class="placard">30-SECOND HEADLINE CHALLENGE</p>
             <div id="stage" class="stage">
-              <canvas id="art" width="256" height="144" role="img" aria-label="Pixel-art ring: you on the left, Jack on the right" data-player-pose="idle" data-enemy-pose="idle" data-guard="off"></canvas>
+              <canvas id="art" role="img" aria-label="Pixel-art ring: you on the left, Jack on the right" data-player-pose="idle" data-enemy-pose="idle" data-guard="off"></canvas>
               <div id="art-fallback" class="art-fallback" hidden aria-hidden="true">
                 <span class="fb-fig fb-player" id="fb-player">YOU</span><span class="fb-fig fb-enemy" id="fb-enemy">JACK</span>
               </div>
-            <div id="countdown" class="countdown" hidden aria-hidden="true"></div>
-            <div id="cue" class="cue" aria-hidden="true"></div>
-            <div id="windup-wrap" class="windup-wrap" hidden aria-hidden="true">
-              <span class="windup-label">WIND-UP</span><div class="windup-bar"><div id="windup-fill"></div></div>
             </div>
-            <div id="counter-badge" class="counter-badge" hidden aria-hidden="true">COUNTER NOW!</div>
+            <p id="placard" class="placard">30-SECOND HEADLINE CHALLENGE</p>
+            <div id="countdown" class="countdown" hidden aria-hidden="true"></div>
+          </div>
+
+          <div id="cuebar" class="cuebar">
+            <div id="cue" class="cue" aria-hidden="true"></div>
+            <div class="cue-status">
+              <div id="windup-wrap" class="windup-wrap" hidden aria-hidden="true">
+                <span class="windup-label">WIND-UP</span><div class="windup-bar"><div id="windup-fill"></div></div>
+              </div>
+              <div id="counter-badge" class="counter-badge" hidden aria-hidden="true">COUNTER NOW!</div>
             </div>
           </div>
 
-          <div id="controls" class="controls">
-            <button type="button" id="btn-guard" class="ctl guard" aria-pressed="false">
-              <span class="ctl-icon" aria-hidden="true">&#x1F6E1;&#xFE0E;</span><span>Guard<small>hold</small></span>
-            </button>
-            <button type="button" id="btn-punch" class="ctl punch">
-              <span class="ctl-icon" aria-hidden="true">&#x1F44A;&#xFE0E;</span><span>Punch<small>tap</small></span>
-            </button>
+          <div class="rail">
+            <p id="instr-play" class="instr">Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
+            <div id="controls" class="controls">
+              <button type="button" id="btn-guard" class="ctl guard" aria-pressed="false">GUARD <span class="ctl-sub">— hold</span></button>
+              <button type="button" id="btn-punch" class="ctl punch">PUNCH <span class="ctl-sub">— tap</span></button>
+            </div>
           </div>
         </div>
 
         <section id="panel-intro" class="panel" aria-labelledby="intro-heading">
           <h2 id="intro-heading" tabindex="-1">Beat Jack inside 30 seconds</h2>
           <p class="subhead">The headline lasted 30 seconds. Your rematch gets 30.</p>
-          <p class="instructions">Hold Guard for the wind-up. After the hit, tap Punch to counter. KO before 30 seconds!</p>
+          <p class="instructions">Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
           <p class="fine">Unofficial creator-boxing parody. Original fictionalized characters; not affiliated with or endorsed by any person or event.</p>
           <div class="row">
             <button type="button" id="btn-play" class="btn primary">Play</button>
@@ -117,14 +124,14 @@
 
       <section id="source-post" class="source-card" aria-labelledby="source-post-heading">
         <h3 id="source-post-heading">Source post — FearedBuck</h3>
-        <p class="privacy">Loading this post connects to X, which may use cookies or other identifiers. You can read the source without loading the embed.</p>
+        <p class="privacy">This embedded post connects to X automatically. X may use cookies or other identifiers and download media.</p>
         <div id="embed-area" class="embed-area" data-embed-state="idle">
           <p id="embed-summary" class="embed-summary">Source summary: FearedBuck reported a Jack Doherty knockout within the first 30 seconds at Brand Risk 16. Posted 17 October 2026, 02:08:52 UTC. This summary is not the embedded post.</p>
           <p id="embed-status" class="embed-status" role="status"></p>
           <div id="embed-mount" class="embed-mount"></div>
         </div>
         <div class="row">
-          <button type="button" id="btn-load-embed" class="btn">Load source post from X</button>
+          <button type="button" id="btn-retry-embed" class="btn" hidden>Try loading again</button>
           <a id="link-open-x" class="btn linkbtn" href="https://twitter.com/FearedBuck/status/2111278238253342868" rel="noopener noreferrer">Open source post on X</a>
         </div>
       </section>
@@ -148,11 +155,12 @@
 <div id="dlg-about" class="dialog" role="dialog" aria-modal="true" aria-labelledby="about-heading" hidden>
   <div class="dialog-card">
     <h2 id="about-heading" tabindex="-1" data-modal-heading>About 30-Second KO</h2>
-    <p>Hold Guard for the wind-up. After the hit, tap Punch to counter. KO before 30 seconds!</p>
+    <p>Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
     <ul>
+      <li>When Jack raises a glove (WIND-UP), hold Guard. After BLOCK, the COUNTER window opens: tap Punch.</li>
+      <li>Punching early drops your guard for half a second, and an unguarded hit stuns you.</li>
       <li>Keyboard: Space or J punches; K or Shift holds Guard; Escape pauses.</li>
       <li>Touch: tap Punch, hold Guard. Both can be used at once.</li>
-      <li>Punching leaves you open for half a second, and an unguarded hit stuns you.</li>
     </ul>
     <p>Unofficial creator-boxing parody. Original fictionalized characters; not affiliated with or endorsed by any person or event. News is inspiration, not a reconstruction of independently verified results.</p>
     <button type="button" id="btn-about-close" class="btn primary">Close</button>

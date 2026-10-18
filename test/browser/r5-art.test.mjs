@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, openGame, state, text, startFight, playToWin } from './helpers.mjs';
-import { renderArena, renderPayoff, frameHash } from '../../games/2026-10-17/js/art.js';
+import { renderArena, renderPayoff, frameHash, layoutFor, BOXER_H } from '../../games/2026-10-17/js/art.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -21,42 +21,51 @@ const sampleWithHash = (page) => page.evaluate(() => {
   const d = a.getContext('2d').getImageData(0, 0, a.width, a.height).data;
   let h = 0x811c9dc5;
   for (let i = 0; i < d.length; i++) { h ^= d[i]; h = Math.imul(h, 0x01000193) >>> 0; }
-  return { player: a.dataset.playerPose, enemy: a.dataset.enemyPose, guard: a.dataset.guard === 'on', counter: !document.getElementById('counter-badge').hidden, hash: h.toString(16).padStart(8, '0') };
+  return { w: a.width, h: a.height, player: a.dataset.playerPose, enemy: a.dataset.enemyPose, guard: a.dataset.guard === 'on', counter: !document.getElementById('counter-badge').hidden, hash: h.toString(16).padStart(8, '0') };
 });
 const sample = (page) => page.evaluate(() => {
   const a = document.getElementById('art');
   return { now: performance.now(), player: a.dataset.playerPose, enemy: a.dataset.enemyPose, guard: a.dataset.guard === 'on', counter: !document.getElementById('counter-badge').hidden };
 });
 
-test('arena is a real 256x144 pixel canvas at an integer scale: 1x at 320, 2x on desktop, letterboxed, nearest-neighbor', async () => {
-  for (const [vp, scale] of [[{ width: 320, height: 640 }, 1], [{ width: 390, height: 800 }, 1], [{ width: 667, height: 375 }, 1], [{ width: 1280, height: 800 }, 2]]) {
+test('arena canvas: sized to the arena itself, whole-number pixel scale, covers every edge (no bars), nearest-neighbor', async () => {
+  for (const [vp, expectPx] of [[{ width: 320, height: 568 }, 1], [{ width: 390, height: 844 }, 2], [{ width: 667, height: 375 }, 1], [{ width: 1280, height: 720 }, 2]]) {
     const g = await openGame(env, { viewport: vp });
     const { page } = g;
     const m = await page.evaluate(() => {
-      const c = document.getElementById('art'); const st = document.getElementById('stage'); const ar = document.getElementById('arena');
-      const r = c.getBoundingClientRect();
-      return { cw: c.width, ch: c.height, w: r.width, h: r.height, x: r.x, y: r.y, scale: Number(st.dataset.scale), rendering: getComputedStyle(c).imageRendering, arenaInner: ar.clientWidth, sw: document.documentElement.scrollWidth, iw: window.innerWidth };
+      const c = document.getElementById('art'); const a = document.getElementById('arena');
+      const r = c.getBoundingClientRect(); const ar = a.getBoundingClientRect();
+      const px = Number(c.dataset.px);
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const col = (x) => { for (let y = 0; y < c.height; y++) { const i = (y * c.width + x) * 4; if (d[i] === 11 && d[i + 1] === 14 && d[i + 2] === 26) return false; } return true; };
+      return { cw: c.width, ch: c.height, px, w: r.width, h: r.height, aw: ar.width, ah: ar.height, left: r.left - ar.left, top: r.top - ar.top, rendering: getComputedStyle(c).imageRendering, edgeColumnsPainted: col(0) && col(c.width - 1), sw: document.documentElement.scrollWidth, iw: innerWidth };
     });
-    assert.deepEqual([m.cw, m.ch], [256, 144]);
-    assert.equal(m.scale, scale, `${vp.width}x${vp.height}`);
-    assert.deepEqual([m.w, m.h], [256 * scale, 144 * scale], 'whole-number multiple, never stretched or cropped');
-    assert.ok(Number.isInteger(m.w) && Number.isInteger(m.h));
+    assert.equal(m.px, expectPx, `${vp.width}x${vp.height}`);
+    assert.deepEqual([m.w, m.h], [m.cw * m.px, m.ch * m.px], 'CSS size is an exact whole-number multiple of the canvas (no blur, no stretch)');
+    assert.ok(m.w >= m.aw && m.h >= m.ah && m.w - m.aw < m.px && m.h - m.ah < m.px, 'the canvas covers the arena; overshoot (clipped) is under one pixel unit');
+    assert.deepEqual([m.left, m.top], [0, 0], 'anchored at the arena corner, not centered with bars');
     assert.match(m.rendering, /pixelated|crisp-edges/);
-    assert.ok(m.arenaInner >= 256, `at least 256 CSS px for the art (${m.arenaInner})`);
+    assert.equal(m.edgeColumnsPainted, true, 'scenery reaches both side edges');
     assert.ok(m.sw <= m.iw);
     await g.context.close();
   }
 });
 
-test('intro subheading and arena placard are present, readable DOM text, and the placard does not cover the art', async () => {
-  const g = await openGame(env, { viewport: { width: 320, height: 640 } });
+test('placard: quiet DOM label inside the arena corner; never over the cue strip, HUD or boxers', async () => {
+  const g = await openGame(env, { viewport: { width: 320, height: 568 } });
   const { page } = g;
   assert.equal(await text(page, '#panel-intro .subhead'), 'The headline lasted 30 seconds. Your rematch gets 30.');
   assert.equal(await text(page, '#placard'), '30-SECOND HEADLINE CHALLENGE');
-  const [pl, st] = await page.evaluate(() => ['placard', 'stage'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return { t: r.top, b: r.bottom, l: r.left, r: r.right }; }));
-  assert.ok(pl.b <= st.t + 0.5, 'placard sits above the stage');
-  assert.ok(pl.r - pl.l <= 320);
-  assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('placard')).fontSize), '11.2px');
+  const m = await page.evaluate(() => {
+    const r = (id) => document.getElementById(id).getBoundingClientRect();
+    const c = document.getElementById('art');
+    return { pl: r('placard'), ar: r('arena'), hud: r('hud'), w: c.width, h: c.height, px: Number(c.dataset.px), fs: getComputedStyle(document.getElementById('placard')).fontSize };
+  });
+  assert.ok(m.pl.top >= m.ar.top && m.pl.left >= m.ar.left && m.pl.right <= m.ar.right && m.pl.height <= 24, 'inside the arena, one slim line');
+  assert.ok(m.pl.top >= m.hud.bottom, 'not over the HUD');
+  const L = layoutFor(m.w, m.h);
+  assert.ok(m.pl.bottom - m.ar.top <= (L.oy - 12) * m.px, 'does not touch the boxers\' raised gloves');
+  assert.equal(m.fs, '12px');
   await g.context.close();
 });
 
@@ -78,7 +87,7 @@ test('canvas pixels match the spec art for every pose reached in play; wind-up a
     if (s.counter && !punched) { await page.keyboard.press('Space'); punched = true; }
     if (i % 4 === 0) {
       const after = await sampleWithHash(page);
-      const expected = frameHash(renderArena({ player: /** @type {any} */ (after.player), enemy: /** @type {any} */ (after.enemy), guard: after.guard, counter: after.counter }));
+      const expected = frameHash(renderArena({ player: /** @type {any} */ (after.player), enemy: /** @type {any} */ (after.enemy), guard: after.guard, counter: after.counter }, { w: after.w, h: after.h }));
       assert.equal(after.hash, expected, `frame ${i} ${JSON.stringify(after)}`);
     }
   }

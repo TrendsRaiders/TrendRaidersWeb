@@ -2,7 +2,7 @@
 import { Sim, formatHundredths } from './engine.js';
 import { ModalStack } from './modal.js';
 import { buildShareText, shareResult } from './share.js';
-import { renderArena, renderPayoff, ARENA_W, ARENA_H, PAYOFF_W, PAYOFF_H } from './art.js';
+import { renderArena, renderPayoff, BOXER_H, PAYOFF_W, PAYOFF_H } from './art.js';
 import { createEmbed } from './embed.js';
 
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -61,14 +61,23 @@ function paint(canvas, frame) {
   const ctx = canvas.getContext('2d');
   if (ctx) ctx.putImageData(new ImageData(frame.data, frame.w, frame.h), 0, 0);
 }
-/** Largest whole-number scale that fits the arena width (and, on short screens, the height). */
-function fitStage() {
-  const w = arena.clientWidth || ARENA_W;
-  const maxH = Math.max(ARENA_H, window.innerHeight - 300);
-  const scale = Math.max(1, Math.min(Math.floor(w / ARENA_W), Math.floor(maxH / ARENA_H)));
-  stage.style.width = `${ARENA_W * scale}px`;
-  stage.style.height = `${ARENA_H * scale}px`;
-  stage.dataset.scale = String(scale);
+/**
+ * The arena is whatever size CSS gives it. Sprites keep whole-number pixel size (`px`, chosen so a boxer is roughly
+ * 25-40% of the arena height); the logical canvas is the arena size divided by px, rounded UP, and clipped by the
+ * arena, so there are never side bars and nothing is stretched.
+ */
+function fitArena() {
+  const W = arena.clientWidth; const H = arena.clientHeight;
+  if (!W || !H) return;
+  const px = Math.max(1, Math.round((0.32 * H) / BOXER_H));
+  const lw = Math.ceil(W / px); const lh = Math.ceil(H / px);
+  if (artCanvas.width !== lw) artCanvas.width = lw;
+  if (artCanvas.height !== lh) artCanvas.height = lh;
+  artCanvas.style.width = `${lw * px}px`;
+  artCanvas.style.height = `${lh * px}px`;
+  artCanvas.dataset.px = String(px);
+  artKey = '';
+  drawArena(sim.now);
 }
 function fitPayoff() {
   const w = $('payoff').clientWidth || PAYOFF_W;
@@ -103,10 +112,10 @@ function drawArena(t) {
     $('fb-enemy').dataset.pose = view.enemy;
     return;
   }
-  const key = `${view.player}|${view.enemy}|${view.guard}|${view.counter}|${view.bob}|${view.win}`;
+  const key = `${view.player}|${view.enemy}|${view.guard}|${view.counter}|${view.bob}|${view.win}|${artCanvas.width}x${artCanvas.height}`;
   if (key === artKey) return;
   artKey = key;
-  paint(artCanvas, renderArena(/** @type {any} */ (view)));
+  paint(artCanvas, renderArena(/** @type {any} */ (view), { w: artCanvas.width, h: artCanvas.height }));
 }
 function drawPayoff(stageNo) { paint(/** @type {HTMLCanvasElement} */ ($('payoff-art')), renderPayoff(stageNo)); }
 function clearPayoffTimers() { payoffTimers.forEach((id) => clearTimeout(id)); payoffTimers = []; }
@@ -141,6 +150,7 @@ function stopRun() { clock.base = simNow(); clock.running = false; }
 function setState(next) {
   state = next;
   app.dataset.state = next;
+  $('game').dataset.state = next;
   const playing = next === 'playing';
   /** @type {HTMLButtonElement} */ ($('btn-pause')).disabled = !(playing || next === 'countdown');
   const inert = next !== 'playing';
@@ -249,11 +259,23 @@ function showCountdown(n) {
   setText(el, n);
 }
 
+/** Explicit Play/Resume/Retry/Restart: bring the whole play panel into view (instant, never animated) before 3-2-1. */
+function positionPanel() {
+  const g = $('game');
+  const r = g.getBoundingClientRect();
+  const fits = r.top >= 0 && r.bottom <= window.innerHeight;
+  if (!fits || window.innerWidth < 900) g.scrollIntoView({ block: 'start', behavior: 'auto' });
+}
+const sizeKey = () => `${window.innerWidth}x${window.innerHeight}`;
+let layoutKey = sizeKey();
+
 function startCountdown() {
   setState('countdown');
   countdown = { start: performance.now() };
   showCountdown(3);
-  arena.focus();
+  arena.focus({ preventScroll: true });
+  positionPanel();
+  layoutKey = sizeKey();
   announce('Get ready.');
 }
 
@@ -262,8 +284,7 @@ function beginPlaying() {
   clearInputs();
   setState('playing');
   startRun();
-  arena.focus();
-  $('game').scrollIntoView({ block: 'nearest' });
+  arena.focus({ preventScroll: true });
   announce('Fight!');
 }
 
@@ -339,10 +360,10 @@ function flushEvents() {
   while (eventCursor < sim.events.length) {
     const e = sim.events[eventCursor++];
     if (e.type === 'windup') { announce('Jack is winding up. Guard!'); beep(330, 80); }
-    else if (e.type === 'strike' && e.result === 'block') { cue('BLOCK! You −4'); announce('Blocked. Counter now!'); beep(150, 90); }
-    else if (e.type === 'strike') { cue('HIT! You −22'); announce('You were hit and stunned.'); beep(100, 140); }
-    else if (e.type === 'impact' && e.counter) { cue('COUNTER! Jack −20'); announce('Counter! Jack loses 20.'); beep(520, 120); }
-    else if (e.type === 'impact') { cue('HIT! Jack −3'); announce('Hit. Jack loses 3.'); beep(380, 60); }
+    else if (e.type === 'strike' && e.result === 'block') { cue('BLOCK −4'); announce('Blocked. Counter now!'); beep(150, 90); }
+    else if (e.type === 'strike') { cue('HIT YOU −22'); announce('You were hit and stunned.'); beep(100, 140); }
+    else if (e.type === 'impact' && e.counter) { cue('COUNTER −20'); announce('Counter! Jack loses 20.'); beep(520, 120); }
+    else if (e.type === 'impact') { cue('HIT JACK −3'); announce('Hit. Jack loses 3.'); beep(380, 60); }
     else if (e.type === 'cancel') announce('Your punch was canceled.');
   }
 }
@@ -517,18 +538,27 @@ function init() {
 
   window.addEventListener('blur', autoPause);
   document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
-  window.addEventListener('pagehide', () => { clearInputs(); stopRun(); });
-  window.addEventListener('pageshow', (e) => { if (e.persisted) goIntro(); });
+  // One automatic official-widget attempt per mount; it never touches play, focus or input state.
+  const embed = createEmbed({ area: $('embed-area'), status: $('embed-status'), mount: $('embed-mount'), retryButton: $('btn-retry-embed') });
+  $('btn-retry-embed').addEventListener('click', () => embed.retry());
+  window.addEventListener('pagehide', () => { clearInputs(); stopRun(); embed.suspend(); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) { goIntro(); embed.resume(); } });
 
-  fitStage();
-  if (typeof ResizeObserver === 'function') new ResizeObserver(() => { fitStage(); if ($('payoff').clientWidth) fitPayoff(); }).observe(arena);
-  window.addEventListener('resize', () => { fitStage(); fitPayoff(); });
-
-  const embed = createEmbed({ area: $('embed-area'), status: $('embed-status'), mount: $('embed-mount'), button: $('btn-load-embed') });
-  $('btn-load-embed').addEventListener('click', () => embed.load());
+  fitArena();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(() => { fitArena(); if ($('payoff').clientWidth) fitPayoff(); }).observe(arena);
+  // Rotation/resize: clear input and pause an active round (health/time preserved) before the layout recomposes.
+  const onResize = () => {
+    const key = sizeKey();
+    if (key !== layoutKey && (state === 'playing' || state === 'countdown')) pauseGame();
+    layoutKey = key;
+    fitArena(); fitPayoff();
+  };
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
 
   newGame();
   setState('intro');
+  embed.start();
 }
 
 init();

@@ -13,7 +13,7 @@ test('intro: copy, preview framing, nav semantics, news readable before play wit
   const g = await openGame(env);
   const { page } = g;
   assert.equal(await state(page), 'intro');
-  assert.match(await text(page, '#panel-intro'), /Hold Guard for the wind-up\. After the hit, tap Punch to counter\. KO before 30 seconds!/);
+  assert.match(await text(page, '#panel-intro'), /Block the hit\. Punch on COUNTER\. KO Jack before time runs out\./);
   assert.match(await text(page, '#panel-intro'), /Unofficial creator-boxing parody\. Original fictionalized characters; not affiliated with or endorsed by any person or event\./);
   assert.match(await text(page, '.preview-banner'), /Preview — not released/);
   assert.equal(await page.getAttribute('nav[aria-label="Game editions"] a[aria-current="page"]', 'aria-current'), 'page');
@@ -27,33 +27,7 @@ test('intro: copy, preview framing, nav semantics, news readable before play wit
   await g.context.close();
 });
 
-for (const [name, viewport] of [['320 portrait', { width: 320, height: 640 }], ['phone landscape', { width: 667, height: 375 }], ['desktop', { width: 1280, height: 800 }]]) {
-  test(`layout ${name}: HUD/controls fully visible, no clipping, ≥56px targets`, async () => {
-    const g = await openGame(env, { viewport });
-    const { page } = g;
-    await startFight(page);
-    await page.evaluate(() => document.getElementById('game').scrollIntoView({ block: 'start' }));
-    const m = await page.evaluate(() => {
-      const box = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; };
-      return {
-        vw: window.innerWidth, vh: window.innerHeight, scrollW: document.documentElement.scrollWidth,
-        hud: box('#hud'), guard: box('#btn-guard'), punch: box('#btn-punch'), arena: box('#arena'), pause: box('#btn-pause'),
-        nav: [...document.querySelectorAll('.site-nav a')].map((a) => { const r = a.getBoundingClientRect(); return { l: r.left, r: r.right }; }),
-      };
-    });
-    assert.ok(m.scrollW <= m.vw, `no horizontal overflow (${m.scrollW} > ${m.vw})`);
-    for (const k of ['hud', 'guard', 'punch', 'arena', 'pause']) {
-      assert.ok(m[k].l >= 0 && m[k].r <= m.vw, `${k} horizontally inside`);
-      assert.ok(m[k].t >= -1 && m[k].b <= m.vh + 1, `${k} vertically inside (${m[k].t}..${m[k].b} of ${m.vh})`);
-    }
-    for (const n of m.nav) assert.ok(n.l >= 0 && n.r <= m.vw, 'nav link inside viewport');
-    assert.ok(m.guard.w >= 56 && m.guard.h >= 56 && m.punch.w >= 56 && m.punch.h >= 56);
-    assert.ok(m.punch.t >= m.arena.b - 1 && m.guard.t >= m.arena.b - 1, 'control strip below arena');
-    assert.ok(m.arena.h >= 100, `arena not squashed (${m.arena.h})`);
-    clean(g);
-    await g.context.close();
-  });
-}
+// Layout geometry at the spec sizes lives in r5-layout.test.mjs.
 
 test('countdown: inputs ignored, no time or damage; then 100/100 and 30s', async () => {
   const g = await openGame(env);
@@ -389,7 +363,8 @@ test('320px keyboard traversal: every stop visible, in viewport, no trap', async
       if (!el || el === document.body) return null;
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
-      return { id: el.id || el.textContent.trim().slice(0, 20), left: r.left, right: r.right, visible: r.width > 0 && cs.visibility !== 'hidden', outline: cs.outlineStyle !== 'none' };
+      // The provider's iframe is third-party content: it must be reachable without a trap, its focus ring is the provider's.
+      return { id: el.id || el.textContent.trim().slice(0, 20), left: r.left, right: r.right, visible: r.width > 0 && cs.visibility !== 'hidden', outline: cs.outlineStyle !== 'none' || el.tagName === 'IFRAME' };
     });
     if (!info) continue;
     seen.add(info.id);

@@ -170,18 +170,18 @@ function boxer(f, { ox, oy, facing, skin, pose }) {
   const mx = (dx) => (facing === 1 ? ox + dx : ox + 13 - dx); // mirror x offsets within the 14px torso
   const bx = ox + p.dx * facing; // body x shifts forward/back along facing
   const by = oy + p.dy;
-  f.rect(bx - 2, by + 47, 20, 3, 'shadow');
+  f.rect(bx - 2, by + 55, 20, 3, 'shadow');
   // legs + shoes
-  f.rect(bx + 2, by + 34, 4, 12, sk.s); f.rect(bx + 8, by + 34, 4, 12, sk.s);
-  f.rect(bx + 1, by + 46, 6, 2, 'black'); f.rect(bx + 7, by + 46, 6, 2, 'black');
+  f.rect(bx + 2, by + 38, 4, 16, sk.s); f.rect(bx + 8, by + 38, 4, 16, sk.s);
+  f.rect(bx + 1, by + 54, 6, 2, 'black'); f.rect(bx + 7, by + 54, 6, 2, 'black');
   // shorts with trim
-  f.rect(bx + 1, by + 24, 12, 11, sk.shorts);
-  f.rect(bx + 1, by + 24, 12, 2, sk.trim);
-  f.rect(bx + 6, by + 26, 2, 9, 'black');
+  f.rect(bx + 1, by + 28, 12, 11, sk.shorts);
+  f.rect(bx + 1, by + 28, 12, 2, sk.trim);
+  f.rect(bx + 6, by + 30, 2, 9, 'black');
   // torso
-  f.rect(bx + 1, by + 11, 12, 13, sk.s);
-  f.rect(bx + 1, by + 21, 12, 3, sk.S);
-  f.rect(bx + 6, by + 13, 2, 6, sk.S);
+  f.rect(bx + 1, by + 11, 12, 17, sk.s);
+  f.rect(bx + 1, by + 25, 12, 3, sk.S);
+  f.rect(bx + 6, by + 13, 2, 8, sk.S);
   // neck + head (mirrored when facing left)
   f.rect(bx + 5, by + 9, 4, 3, sk.S);
   const head = facing === 1 ? HEAD : flipH(HEAD);
@@ -204,27 +204,39 @@ function boxer(f, { ox, oy, facing, skin, pose }) {
   place(p.front, shoulderF, false);
 }
 
-function arenaBackdrop(f) {
-  f.rect(0, 0, ARENA_W, ARENA_H, 'void');
-  f.rect(0, 0, ARENA_W, 92, 'wall');
-  // blocky crowd silhouette and banner blocks (decorative, no lettering)
-  for (let x = 0; x < ARENA_W; x += 8) {
-    const h = 8 + ((x * 7) % 5) * 2;
-    f.rect(x, 40 - h + 8, 8, h, 'crowd');
-    f.rect(x + 2, 40 - h + 5, 4, 4, 'crowd');
+export const BOXER_H = 56;
+
+/**
+ * Responsive layout in logical pixels: the ring always spans the full width; boxers keep their pixel size and are
+ * positioned for the aspect ratio (never stretched, never cropped).
+ */
+export function layoutFor(w, h) {
+  const feet = Math.round(h * 0.82);
+  const gap = Math.max(98, Math.min(170, Math.round(w * 0.2)));
+  const cx = Math.round(w / 2);
+  const oy = feet - BOXER_H;
+  return { feet, oy, floorTop: feet - 10, playerX: cx - Math.round(gap / 2) - 14, enemyX: cx + Math.round(gap / 2), gap };
+}
+
+function arenaBackdrop(f, L) {
+  const { w, h } = { w: f.w, h: f.h };
+  f.rect(0, 0, w, h, 'void');
+  f.rect(0, 0, w, L.floorTop, 'wall');
+  // blocky crowd silhouette and banner blocks (decorative, no lettering), full width
+  const crowdBase = L.feet - 52;
+  for (let x = 0; x < w; x += 8) {
+    const ch = 8 + ((x * 7) % 5) * 2;
+    f.rect(x, crowdBase - ch, 8, ch, 'crowd');
+    f.rect(x + 2, crowdBase - ch - 3, 4, 4, 'crowd');
   }
-  for (let i = 0; i < 6; i++) f.rect(24 + i * 36, 8, 20, 12, i % 2 ? 'wall2' : 'wall');
-  // floor and apron
-  f.rect(0, 92, ARENA_W, 52, 'floor');
-  for (let x = 0; x < ARENA_W; x += 16) f.rect(x, 120, 8, 24, 'floor2');
-  f.rect(0, 128, ARENA_W, 16, 'apron');
-  // flat rectangular ring: posts and three ropes
-  for (const [px] of [[8], [244]]) {
-    f.rect(px, 44, 4, 56, 'post'); f.rect(px + 3, 44, 1, 56, 'postShade');
-    f.rect(px - 1, 98, 6, 4, 'postShade');
-  }
-  for (const y of [54, 68, 82]) {
-    f.rect(12, y, 232, 2, 'rope'); f.rect(12, y + 2, 232, 1, 'ropeShade');
+  for (let x = 12, i = 0; x < w; x += 36, i++) f.rect(x, Math.max(6, crowdBase - 48), 20, 12, i % 2 ? 'wall2' : 'wall');
+  // floor and apron, full width
+  f.rect(0, L.floorTop, w, h - L.floorTop, 'floor');
+  for (let x = 0; x < w; x += 16) f.rect(x, L.feet + 8, 8, h - L.feet - 8, 'floor2');
+  f.rect(0, L.feet + 16, w, h - L.feet - 16, 'apron');
+  // flat ropes edge to edge (no posts, no side bars)
+  for (const y of [L.feet - 48, L.feet - 34, L.feet - 20]) {
+    f.rect(0, y, w, 2, 'rope'); f.rect(0, y + 2, w, 1, 'ropeShade');
   }
 }
 
@@ -232,20 +244,22 @@ function arenaBackdrop(f) {
  * @typedef {{ player: keyof typeof POSES, enemy: 'idle'|'windup'|'strike'|'recovery', guard: boolean,
  *   counter: boolean, bob: number, win: boolean }} ArenaView
  */
-/** @param {Partial<ArenaView>} [v] */
-export function renderArena(v = {}) {
+/** @param {Partial<ArenaView>} [v] @param {{ w: number, h: number }} [size] logical pixels (default: the 256x144 reference) */
+export function renderArena(v = {}, size = { w: ARENA_W, h: ARENA_H }) {
   const view = { player: 'idle', enemy: 'idle', guard: false, counter: false, bob: 0, win: false, ...v };
-  const f = new Frame(ARENA_W, ARENA_H);
-  arenaBackdrop(f);
+  const f = new Frame(size.w, size.h);
+  const L = layoutFor(size.w, size.h);
+  arenaBackdrop(f, L);
   const bob = view.bob ? 1 : 0;
-  boxer(f, { ox: 62, oy: 54 + (view.player === 'idle' ? bob : 0), facing: 1, skin: 'a', pose: /** @type {keyof typeof POSES} */ (view.player) });
-  boxer(f, { ox: 174, oy: 54 + (view.enemy === 'idle' ? 1 - bob : 0), facing: -1, skin: 'b', pose: /** @type {keyof typeof POSES} */ (ENEMY_POSE_MAP[view.enemy]) });
-  if (view.guard) f.bitmap(88, 44, SHIELD, { s: 'shield', S: 'shieldShade' });
-  if (view.player === 'stun') for (const [x, y] of [[66, 44], [76, 40], [86, 44]]) f.bitmap(x, y, STAR, { a: 'star' });
-  if (view.enemy === 'windup') f.bitmap(204, 38, BANG, { a: 'alert' });
-  if (view.counter) f.bitmap(196, 36, BURST, { a: 'star' });
+  boxer(f, { ox: L.playerX, oy: L.oy + (view.player === 'idle' ? bob : 0), facing: 1, skin: 'a', pose: /** @type {keyof typeof POSES} */ (view.player) });
+  boxer(f, { ox: L.enemyX, oy: L.oy + (view.enemy === 'idle' ? 1 - bob : 0), facing: -1, skin: 'b', pose: /** @type {keyof typeof POSES} */ (ENEMY_POSE_MAP[view.enemy]) });
+  if (view.guard) f.bitmap(L.playerX + 26, L.oy - 10, SHIELD, { s: 'shield', S: 'shieldShade' });
+  if (view.player === 'stun') for (const [dx, dy] of [[4, -10], [14, -14], [24, -10]]) f.bitmap(L.playerX + dx, L.oy + dy, STAR, { a: 'star' });
+  if (view.enemy === 'windup') f.bitmap(L.enemyX + 30, L.oy - 16, BANG, { a: 'alert' });
+  if (view.counter) f.bitmap(L.enemyX + 22, L.oy - 18, BURST, { a: 'star' });
   if (view.win) {
-    f.rect(140, 100, 24, 3, 'wood'); f.rect(142, 103, 2, 8, 'woodShade'); f.rect(160, 103, 2, 8, 'woodShade');
+    const sx = L.enemyX - 34; const sy = L.oy + 46;
+    f.rect(sx, sy, 24, 3, 'wood'); f.rect(sx + 2, sy + 3, 2, 8, 'woodShade'); f.rect(sx + 20, sy + 3, 2, 8, 'woodShade');
   }
   return f;
 }

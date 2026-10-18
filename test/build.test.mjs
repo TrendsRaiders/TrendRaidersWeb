@@ -147,7 +147,7 @@ test('package is type: module', () => {
   assert.equal(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).type, 'module');
 });
 
-test('r4: CSP is narrow (no unsafe-inline/eval, no wildcards) and only the X widget host is allowed', async () => {
+test('r5: CSP is narrow (no unsafe-inline/eval, no wildcards) and only the X widget host is allowed', async () => {
   const { CSP, CSP_DIRECTIVES } = await import('../scripts/lib/build-lib.mjs');
   assert.doesNotMatch(CSP, /unsafe-|\*|http:/);
   assert.deepEqual(CSP_DIRECTIVES.filter((d) => d.includes('data:')), ["img-src 'self' data:"], 'data: only for images (inline favicon)');
@@ -168,7 +168,7 @@ test('r4: CSP is narrow (no unsafe-inline/eval, no wildcards) and only the X wid
   assert.ok(game.indexOf('Content-Security-Policy') < game.indexOf('<script'), 'policy precedes every script');
 });
 
-test('r4: no X/provider script, iframe, preconnect or prefetch exists in the initial HTML', () => {
+test('r5: no X/provider script, iframe, preconnect or prefetch exists in the initial HTML', () => {
   const game = read(out('preview'), 'games/2026-10-17/index.html');
   const withoutCsp = game.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
   assert.doesNotMatch(withoutCsp, /<script[^>]+src=["']https?:/i);
@@ -180,22 +180,35 @@ test('r4: no X/provider script, iframe, preconnect or prefetch exists in the ini
   ]);
 });
 
-test('r4: copy — intro subheading, placard, payoff punchline, embed card text and links are exact', () => {
+test('r5: copy — intro subheading, exact short instruction, placard, payoff punchline, automatic-embed notice and links', () => {
   const game = read(out('preview'), 'games/2026-10-17/index.html');
   for (const t of [
     'The headline lasted 30 seconds. Your rematch gets 30.',
+    'Block the hit. Punch on COUNTER. KO Jack before time runs out.',
     '30-SECOND HEADLINE CHALLENGE',
     'Headline speedrun complete. The timeline can wait.',
     'Source post — FearedBuck',
-    'Loading this post connects to X, which may use cookies or other identifiers. You can read the source without loading the embed.',
+    'This embedded post connects to X automatically. X may use cookies or other identifiers and download media.',
     'Source summary: FearedBuck reported a Jack Doherty knockout within the first 30 seconds at Brand Risk 16. Posted 17 October 2026, 02:08:52 UTC. This summary is not the embedded post.',
-    'Load source post from X',
+    'Try loading again',
     'Open source post on X',
-    'Hold Guard for the wind-up. After the hit, tap Punch to counter. KO before 30 seconds!',
   ]) assert.ok(game.includes(t), t);
+  assert.equal((game.match(/Block the hit\. Punch on COUNTER\. KO Jack before time runs out\./g) || []).length >= 3, true, 'intro, active strip and About');
+  assert.match(game, /GUARD <span class="ctl-sub">— hold<\/span>/);
+  assert.match(game, /PUNCH <span class="ctl-sub">— tap<\/span>/);
+  for (const gone of ['Load source post from X', 'You can read the source without loading the embed', 'Hold Guard for the wind-up. After the hit, tap Punch']) assert.ok(!game.includes(gone), `removed: ${gone}`);
+  assert.match(game, /id="btn-retry-embed" class="btn" hidden/);
 });
 
-test('r4: real (empty) registry gives the preview candidate two genuinely disabled ends', () => {
+test('r5: stylesheet is flat — no gradients, shadows, glow, blur or translucent glass', () => {
+  for (const f of ['games/2026-10-17/game.css', 'assets/site.css']) {
+    const css = read(out('preview'), f);
+    assert.doesNotMatch(css, /gradient|box-shadow|text-shadow|drop-shadow|backdrop-filter|filter:|blur\(/i, f);
+    assert.doesNotMatch(css, /#[0-9a-f]{8}\b/i, `${f}: no alpha colors (glass)`);
+  }
+});
+
+test('r5: real (empty) registry gives the preview candidate two genuinely disabled ends', () => {
   const game = read(out('preview'), 'games/2026-10-17/index.html');
   assert.match(game, /<nav class="game-nav" aria-label="Game navigation">/);
   assert.equal((game.match(/<button type="button" class="gn-link" disabled/g) || []).length, 2);

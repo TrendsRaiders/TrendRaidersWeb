@@ -1,5 +1,6 @@
-// Click-to-load official X (Twitter) embedded post for the news source. Nothing contacts X until load() is called.
-// Uses the supported widgets.js API (twttr.widgets.createTweet). Never moves focus, never auto-retries.
+// Automatic official X (Twitter) embedded post for the news source. One attempt starts when the edition page mounts
+// (start()); the provider script is loaded once and reused by Retry. Never moves focus, never touches gameplay,
+// never retries on its own, and ignores callbacks from superseded attempts.
 
 export const TWEET_ID = '2111278238253342868';
 export const WIDGETS_SRC = 'https://platform.twitter.com/widgets.js';
@@ -12,43 +13,65 @@ export const MSG = {
 };
 
 /**
- * @param {{ area: HTMLElement, status: HTMLElement, mount: HTMLElement, button: HTMLElement,
+ * @param {{ area: HTMLElement, status: HTMLElement, mount: HTMLElement, retryButton: HTMLElement,
  *   doc?: Document, win?: any, timeoutMs?: number }} o
  */
-export function createEmbed({ area, status, mount, button, doc = document, win = window, timeoutMs = LOAD_TIMEOUT_MS }) {
+export function createEmbed({ area, status, mount, retryButton, doc = document, win = window, timeoutMs = LOAD_TIMEOUT_MS }) {
   /** @type {'idle'|'loading'|'loaded'|'failed'} */
   let state = 'idle';
   let timer = 0;
-  let renderedFor = 0;
   let attempt = 0;
-  let scriptFailed = false;
-  let scriptLoaded = false;
+  let renderedFor = 0;
+  let suspended = false;
+  /** @type {Promise<any>|null} */
+  let providerPromise = null;
 
-  function set(next, message, label, disabled) {
+  function set(next, message) {
     state = next;
     area.dataset.embedState = next;
     status.textContent = message;
-    button.textContent = label;
-    button.setAttribute('aria-disabled', String(disabled));
+    retryButton.hidden = next !== 'failed';
   }
   function clearTimer() { if (timer) { win.clearTimeout(timer); timer = 0; } }
   function fail() {
     clearTimer();
     if (state === 'loaded') return;
-    set('failed', MSG.failed, 'Try loading again', false);
+    set('failed', MSG.failed);
   }
   function succeed() {
     clearTimer();
-    set('loaded', MSG.loaded, 'Source post loaded', true);
+    set('loaded', MSG.loaded);
+  }
+  const api = () => {
+    const tw = win.twttr;
+    return tw && tw.widgets && typeof tw.widgets.createTweet === 'function' ? tw : null;
+  };
+
+  /** The single provider script loader: reused while pending or loaded, replaced only after it failed. */
+  function provider() {
+    const ready = api();
+    if (ready) return Promise.resolve(ready);
+    if (providerPromise) return providerPromise;
+    providerPromise = new Promise((resolve, reject) => {
+      const old = doc.getElementById(SCRIPT_ID);
+      if (old) old.remove();
+      const script = doc.createElement('script');
+      script.id = SCRIPT_ID;
+      script.async = true;
+      script.src = WIDGETS_SRC;
+      script.charset = 'utf-8';
+      const dead = () => { providerPromise = null; script.remove(); reject(new Error('provider unavailable')); };
+      script.addEventListener('load', () => { const tw = api(); if (tw) resolve(tw); else dead(); });
+      script.addEventListener('error', dead);
+      doc.head.appendChild(script);
+    });
+    return providerPromise;
   }
 
-  // Each attempt renders into its own holder. A retry detaches the previous holder, so content that a superseded
-  // attempt appends later is never displayed, and only the current attempt may change the state.
-  function render() {
-    const mine = attempt;
-    if (renderedFor === mine || state === 'loaded') return;
-    const twttr = win.twttr;
-    if (!twttr || !twttr.widgets || typeof twttr.widgets.createTweet !== 'function') { fail(); return; }
+  // Each attempt renders into its own holder; starting a new attempt detaches the previous holder, so a superseded
+  // attempt can never show (or hide) anything and only the current attempt may change the state.
+  function render(mine, twttr) {
+    if (mine !== attempt || suspended || state === 'loaded' || renderedFor === mine) return;
     renderedFor = mine;
     const holder = doc.createElement('div');
     holder.className = 'embed-holder';
@@ -58,40 +81,32 @@ export function createEmbed({ area, status, mount, button, doc = document, win =
       let p;
       try {
         p = Promise.resolve(twttr.widgets.createTweet(TWEET_ID, holder, { conversation: 'none', dnt: true, theme: 'dark', align: 'center', width }));
-      } catch { if (mine === attempt) fail(); return; }
-      // The same attempt's late success may replace its own timeout fallback; superseded attempts are ignored.
-      p.then((el) => { if (mine !== attempt) return; if (el) succeed(); else fail(); },
-        () => { if (mine === attempt) fail(); });
+      } catch { if (mine === attempt && !suspended) fail(); return; }
+      p.then((el) => { if (mine !== attempt || suspended) return; if (el) succeed(); else fail(); },
+        () => { if (mine === attempt && !suspended) fail(); });
     };
     if (typeof twttr.ready === 'function') twttr.ready(run); else run();
   }
 
-  function addScript() {
-    let script = /** @type {HTMLScriptElement|null} */ (doc.getElementById(SCRIPT_ID));
-    // A script that errored, or loaded without providing the widget API, is replaced on an explicit retry.
-    if (script && (scriptFailed || scriptLoaded)) { script.remove(); script = null; scriptFailed = false; scriptLoaded = false; }
-    if (script) return; // a slow attempt is still pending; its load handler will render
-    script = doc.createElement('script');
-    script.id = SCRIPT_ID;
-    script.async = true;
-    script.src = WIDGETS_SRC;
-    script.charset = 'utf-8';
-    script.addEventListener('load', () => { scriptLoaded = true; if (state !== 'idle') render(); });
-    script.addEventListener('error', () => { scriptFailed = true; if (state === 'loading') fail(); });
-    doc.head.appendChild(script);
+  function begin() {
+    attempt += 1;
+    const mine = attempt;
+    mount.textContent = '';
+    set('loading', MSG.loading);
+    clearTimer();
+    timer = win.setTimeout(() => { if (mine === attempt && !suspended) fail(); }, timeoutMs);
+    provider().then((tw) => render(mine, tw), () => { if (mine === attempt && !suspended) fail(); });
   }
 
   return {
     get state() { return state; },
-    /** Explicit user action only (first Load or Try loading again). */
-    load() {
-      if (state === 'loading' || state === 'loaded') return;
-      mount.textContent = '';
-      attempt += 1; // an explicit retry supersedes any attempt that never settled
-      set('loading', MSG.loading, 'Loading…', true);
-      clearTimer();
-      timer = win.setTimeout(fail, timeoutMs);
-      if (win.twttr && win.twttr.widgets) render(); else addScript();
-    },
+    /** The one automatic attempt, called when the edition page mounts. */
+    start() { if (state === 'idle') begin(); },
+    /** Explicit Try loading again (only offered after a failure/timeout). */
+    retry() { if (state === 'failed') begin(); },
+    /** Page hidden/left: stale callbacks are ignored from now on. */
+    suspend() { suspended = true; clearTimer(); },
+    /** Returning to a restored page: at most one new attempt unless the post is already displayed. */
+    resume() { suspended = false; if (state === 'loading' || state === 'failed') begin(); },
   };
 }
