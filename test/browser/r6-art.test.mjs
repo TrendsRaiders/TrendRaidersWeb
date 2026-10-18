@@ -54,7 +54,7 @@ test('arena canvas: sized to the arena itself, whole-number pixel scale, covers 
 test('placard: quiet DOM label inside the arena corner; never over the cue strip, HUD or boxers', async () => {
   const g = await openGame(env, { viewport: { width: 320, height: 568 } });
   const { page } = g;
-  assert.equal(await text(page, '#panel-intro .subhead'), 'The headline lasted 30 seconds. Your rematch gets 30.');
+  assert.equal(await page.locator('#panel-intro').getByText('The headline lasted').count(), 0, 'flavor line lives in About, not the overlay');
   assert.equal(await text(page, '#placard'), '30-SECOND HEADLINE CHALLENGE');
   const m = await page.evaluate(() => {
     const r = (id) => document.getElementById(id).getBoundingClientRect();

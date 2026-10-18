@@ -170,10 +170,10 @@ function boxer(f, { ox, oy, facing, skin, pose }) {
   const mx = (dx) => (facing === 1 ? ox + dx : ox + 13 - dx); // mirror x offsets within the 14px torso
   const bx = ox + p.dx * facing; // body x shifts forward/back along facing
   const by = oy + p.dy;
-  f.rect(bx - 2, by + 55, 20, 3, 'shadow');
+  f.rect(bx - 2, by + 59, 20, 3, 'shadow');
   // legs + shoes
-  f.rect(bx + 2, by + 38, 4, 16, sk.s); f.rect(bx + 8, by + 38, 4, 16, sk.s);
-  f.rect(bx + 1, by + 54, 6, 2, 'black'); f.rect(bx + 7, by + 54, 6, 2, 'black');
+  f.rect(bx + 2, by + 38, 4, 20, sk.s); f.rect(bx + 8, by + 38, 4, 20, sk.s);
+  f.rect(bx + 1, by + 58, 6, 2, 'black'); f.rect(bx + 7, by + 58, 6, 2, 'black');
   // shorts with trim
   f.rect(bx + 1, by + 28, 12, 11, sk.shorts);
   f.rect(bx + 1, by + 28, 12, 2, sk.trim);
@@ -204,7 +204,7 @@ function boxer(f, { ox, oy, facing, skin, pose }) {
   place(p.front, shoulderF, false);
 }
 
-export const BOXER_H = 56;
+export const BOXER_H = 60;
 
 /**
  * Responsive layout in logical pixels: the ring always spans the full width; boxers keep their pixel size and are

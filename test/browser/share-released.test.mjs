@@ -23,7 +23,7 @@ test('released edition: win text includes exact time and production edition URL;
   await playToWin(page);
   const time = (await text(page, '#result-time')).match(/(\d+\.\d\d)s/)[1];
   assert.equal(await text(page, '#btn-share'), 'Share result');
-  assert.doesNotMatch(await text(page, '.preview-banner').catch(() => ''), /.+/);
+  assert.equal(await page.locator('.preview-badge').count(), 0, 'no preview framing on a released edition');
   await page.click('#btn-share');
   assert.deepEqual(await page.evaluate(() => window.__shared), [{ text: `I scored a KO in ${time}s in 30-Second KO. Can you beat my time? ${URL_}` }]);
   assert.equal(await page.isVisible('#dlg-share'), false);
@@ -65,9 +65,9 @@ test('unsupported Web Share falls back to clipboard with the link; loss text per
 test('released edition at its stable route still loads, has no preview framing, and root opens it', async () => {
   const g = await openGame(env, { route: '/' });
   const { page } = g;
-  assert.equal(await page.locator('.preview-banner').count(), 0);
+  assert.equal(await page.locator('.preview-badge').count(), 0);
   assert.equal(await page.getAttribute('nav a[aria-current="page"]', 'href'), GAME);
-  assert.equal(await text(page, 'nav a[aria-current="page"]'), '17 Oct 2026');
+  assert.match(await text(page, 'nav a[aria-current="page"]'), /^17 Oct 2026\s*UTC edition$/);
   assert.equal(await state(page), 'intro');
   assert.deepEqual(g.problems, []);
   await g.context.close();

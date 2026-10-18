@@ -42,11 +42,11 @@ test('scaffold page references no remote assets', () => {
 test('preview build exposes the candidate route, labeled nav entry and conspicuous banner', () => {
   const d = out('preview');
   const html = read(d, 'games/2026-10-17/index.html');
-  assert.match(html, /17 Oct 2026 — Preview \(not released\)/);
+  assert.match(html, /17 Oct 2026<span class="pv"> — Preview \(not released\)<\/span>/);
   assert.match(html, /aria-current="page"[^>]*>17 Oct 2026/);
-  assert.match(html, /class="preview-banner"[^>]*>Preview — not released/);
+  assert.match(html, /class="preview-badge" role="note">Preview — not released/);
   assert.match(html, /<meta name="robots" content="noindex">/);
-  assert.match(html, /<nav class="site-nav" aria-label="Game editions">/);
+  assert.match(html, /<nav class="site-nav" aria-label="Game navigation">/);
   assert.match(html, /"shareUrl":null/);
   // root opens the candidate only with the banner
   const root = read(d, 'index.html');
@@ -193,7 +193,20 @@ test('r5: copy — intro subheading, exact short instruction, placard, payoff pu
     'Try loading again',
     'Open source post on X',
   ]) assert.ok(game.includes(t), t);
-  assert.equal((game.match(/Block the hit\. Punch on COUNTER\. KO Jack before time runs out\./g) || []).length >= 3, true, 'intro, active strip and About');
+  assert.equal((game.match(/Block the hit\. Punch on COUNTER\. KO Jack before time runs out\./g) || []).length, 2, 'Intro overlay and About only: no persistent instruction in the play layout');
+  assert.ok(game.includes('<strong>PUNCH:</strong> Space / J · <strong>GUARD:</strong> hold K / Shift · Esc: Pause'));
+  assert.ok(game.includes('<strong>PUNCH:</strong> tap · <strong>GUARD:</strong> hold'));
+  assert.match(game, /<h2 id="intro-heading" class="intro-heading">Ready\?<\/h2>/);
+  assert.match(game, /<button type="button" id="btn-start" class="btn primary start" aria-describedby="intro-goal intro-keys intro-touch">Start round<\/button>/);
+  assert.ok(game.indexOf('id="panel-intro"') > game.indexOf('id="arena"') && game.indexOf('id="panel-intro"') < game.indexOf('id="cuebar"'), 'Intro lives inside the arena');
+  assert.ok(!game.includes('instr-play') && !game.includes('data-open-about'));
+  assert.equal((game.match(/id="btn-about"/g) || []).length, 1, 'one About control');
+  assert.ok(game.indexOf('id="btn-about"') > game.indexOf('id="news"') && /<footer class="site-footer"><button type="button" id="btn-about"/.test(game), 'About is a normal-flow footer control after the news');
+  const head = game.slice(game.indexOf('<header'), game.indexOf('</header>'));
+  assert.doesNotMatch(head, /About|Block the hit|Unofficial creator-boxing|news-card|<h1/i, 'header has no About, tutorial, framing or title block');
+  assert.ok(game.includes('The headline lasted 30 seconds. Your rematch gets 30.'), 'flavor line (About)');
+  const intro = game.slice(game.indexOf('id="panel-intro"'), game.indexOf('</section>', game.indexOf('id="panel-intro"')));
+  assert.doesNotMatch(intro, /Unofficial|About|The headline lasted|<a /, 'minimal overlay: goal, keys, touch, Start');
   assert.match(game, /GUARD <span class="ctl-sub">— hold<\/span>/);
   assert.match(game, /PUNCH <span class="ctl-sub">— tap<\/span>/);
   for (const gone of ['Load source post from X', 'You can read the source without loading the embed', 'Hold Guard for the wind-up. After the hit, tap Punch']) assert.ok(!game.includes(gone), `removed: ${gone}`);
@@ -208,12 +221,15 @@ test('r5: stylesheet is flat — no gradients, shadows, glow, blur or translucen
   }
 });
 
-test('r5: real (empty) registry gives the preview candidate two genuinely disabled ends', () => {
+test('r6: real (empty) registry gives the preview candidate two genuinely disabled ends in the single compact header navigation', () => {
   const game = read(out('preview'), 'games/2026-10-17/index.html');
-  assert.match(game, /<nav class="game-nav" aria-label="Game navigation">/);
+  assert.match(game, /<nav class="site-nav" aria-label="Game navigation">/);
+  assert.equal((game.match(/<nav /g) || []).length, 1, 'one navigation region, no second toolbar');
   assert.equal((game.match(/<button type="button" class="gn-link" disabled/g) || []).length, 2);
   assert.doesNotMatch(game, /<a class="gn-link"/);
-  assert.ok(game.includes('No earlier released game') && game.includes('No later released game'));
-  assert.ok(game.indexOf('game-nav') < game.indexOf('id="game"'), 'above the arena');
-  assert.doesNotMatch(read(out('public'), 'index.html'), /game-nav/);
+  assert.ok(game.includes('None earlier') && game.includes('None later'), 'compact visible labels');
+  assert.ok(game.includes('No earlier released game') && game.includes('No later released game'), 'accessible full labels');
+  assert.match(game, /← <\/span> Previous<span class="sr-only"> game<\/span>|<span aria-hidden="true">←<\/span> Previous<span class="sr-only"> game<\/span>/);
+  assert.ok(game.indexOf('<header') < game.indexOf('<main') && game.indexOf('</header>') < game.indexOf('id="game"'), 'header above the play section');
+  assert.doesNotMatch(read(out('public'), 'index.html'), /site-nav|game-nav/);
 });

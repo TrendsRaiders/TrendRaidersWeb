@@ -48,7 +48,11 @@ async function http() {
   check('root and dated route 200, equal to local HTML and to each other', root.status === 200 && dated.status === 200 && root.buf.equals(await local('index.html')) && dated.buf.equals(await local('games/2026-10-17/index.html')) && root.buf.equals(dated.buf));
   const html = dated.buf.toString();
   const bare = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
-  check('HTML: preview framing, noindex, nav label, source href, news heading', html.includes('<meta name="robots" content="noindex">') && html.includes('Preview — not released') && html.includes(`aria-current="page">${LABEL}<`) && html.includes('href="https://twitter.com/FearedBuck/status/2111278238253342868"') && html.includes('>News behind the game</h2>'));
+  check('HTML: preview framing, noindex, nav label, source href, news heading', html.includes('<meta name="robots" content="noindex">') && html.includes('Preview — not released') && html.includes('aria-current="page">17 Oct 2026<span class="pv"> — Preview (not released)</span>') && html.includes('<span class="preview-badge" role="note">Preview — not released</span>') && html.includes('href="https://twitter.com/FearedBuck/status/2111278238253342868"') && html.includes('>News behind the game</h2>'));
+  const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+  check('HTML r6: ONE compact navigation in the header; no About/tutorial/title/share in the header; About only in the footer after the news', (html.match(/<nav /g) || []).length === 1 && html.includes('<nav class="site-nav" aria-label="Game navigation">') && !/About|Block the hit|<h1|Share/.test(header) && /<footer class="site-footer"><button type="button" id="btn-about"/.test(html) && html.indexOf('id="btn-about"') > html.indexOf('id="news"') && (html.match(/id="btn-about"/g) || []).length === 1);
+  check('HTML r6: Intro overlay inside the arena with the exact goal, keyboard and touch lines and Start round; no persistent instruction element', html.indexOf('id="panel-intro"') > html.indexOf('id="arena"') && html.indexOf('id="panel-intro"') < html.indexOf('id="cuebar"') && html.includes('Block the hit. Punch on COUNTER. KO Jack before time runs out.') && html.includes('<strong>PUNCH:</strong> Space / J · <strong>GUARD:</strong> hold K / Shift · Esc: Pause') && html.includes('<strong>PUNCH:</strong> tap · <strong>GUARD:</strong> hold') && html.includes('>Start round</button>') && !html.includes('instr-play') && (html.match(/Block the hit\. Punch on COUNTER/g) || []).length === 2);
+  check('HTML r6: disabled ends carry compact visible and full accessible labels', html.includes('None earlier<span class="sr-only"> — No earlier released game</span>') && html.includes('None later<span class="sr-only"> — No later released game</span>'));
   check('HTML: no provider script/iframe/hint in markup (the one automatic attempt is injected by game code)', !/<iframe|rel="(preconnect|dns-prefetch|preload)"|<script[^>]+src="https?:/i.test(bare));
   const nf = await get(UNKNOWN);
   check('unknown date is an honest HTTP 404 page, equal to local 404.html', nf.status === 404 && nf.buf.equals(await local('404.html')) && /Page not found/.test(nf.buf.toString()) && !/id="app"/.test(nf.buf.toString()));
@@ -68,23 +72,30 @@ const st = (p) => p.getAttribute('#app', 'data-state');
 const tx = async (p, s) => ((await p.textContent(s)) || '').trim();
 const geo = (page) => page.evaluate(() => {
   const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, right: b.right, bottom: b.bottom }; };
-  return { vw: innerWidth, vh: innerHeight, sw: document.documentElement.scrollWidth, hud: r('#hud'), arena: r('#arena'), cue: r('#cuebar'), guard: r('#btn-guard'), punch: r('#btn-punch'), pause: r('#btn-pause'), canvas: (() => { const c = /** @type {HTMLCanvasElement} */ (document.getElementById('art')); return [c.width, c.height, Number(c.dataset.px)]; })() };
+  return { vw: innerWidth, vh: innerHeight, sw: document.documentElement.scrollWidth, restart: r('#btn-restart-play'), hud: r('#hud'), arena: r('#arena'), cue: r('#cuebar'), guard: r('#btn-guard'), punch: r('#btn-punch'), pause: r('#btn-pause'), canvas: (() => { const c = /** @type {HTMLCanvasElement} */ (document.getElementById('art')); return [c.width, c.height, Number(c.dataset.px)]; })() };
 });
 const waitState = (p, s) => p.waitForFunction((x) => document.getElementById('app')?.dataset.state === x, s, { timeout: 8000, polling: 20 });
 
 async function active(browser, name, w, h, mode) {
   const { context, page } = await pageFor(browser, { viewport: { width: w, height: h }, hasTouch: mode !== 'desktop' }, name);
   await page.goto(`${DRAFT}${GAME}`);
-  check(`${name}: Intro, preview label, notice, summary/link, no Load button`, (await st(page)) === 'intro' && (await page.getAttribute('nav a[aria-current="page"]', 'aria-current')) === 'page' && (await tx(page, 'nav a[aria-current="page"]')) === LABEL && (await tx(page, '.privacy')).startsWith('This embedded post connects to X automatically.') && (await page.locator('#btn-load-embed').count()) === 0 && (await page.isVisible('#link-open-x')));
-  check(`${name}: Previous/Next are disabled buttons with honest text (real empty registry)`, await page.evaluate(() => [...document.querySelectorAll('.game-nav button[data-gn]')].every((b) => /** @type {HTMLButtonElement} */ (b).disabled) && document.querySelectorAll('.game-nav a').length === 0));
-  await page.click('#btn-play'); await waitState(page, 'playing');
+  const intro = await page.evaluate(() => { const r = (id) => /** @type {HTMLElement} */ (document.getElementById(id)).getBoundingClientRect(); const a = r('arena'); const i = r('panel-intro'); return { inside: i.x >= a.x - 0.5 && i.right <= a.right + 0.5 && i.y >= a.y - 0.5 && i.bottom <= a.bottom + 0.5, active: document.activeElement?.id, header: /** @type {Element} */ (document.querySelector('.site-header')).getBoundingClientRect().height, fonts: ['.intro-goal', '.intro-keys', '.intro-touch', '#btn-start'].map((s) => parseFloat(getComputedStyle(/** @type {Element} */ (document.querySelector(s))).fontSize)), hp: (document.getElementById('hp-player')?.textContent || '').trim(), time: (document.getElementById('time-left')?.textContent || '').trim() }; });
+  evidence[`${name} intro`] = intro;
+  check(`${name}: Intro fits inside the arena at >=16px, Start focused, 100/30 shown, preview label, notice, summary/link, no Load button`, (await st(page)) === 'intro' && intro.inside && intro.active === 'btn-start' && intro.fonts.every((f) => f >= 16) && /100$/.test(intro.hp) && intro.time === '30' && (await tx(page, 'nav a[aria-current="page"]')).startsWith('17 Oct 2026') && (await tx(page, '.privacy')).startsWith('This embedded post connects to X automatically.') && (await page.locator('#btn-load-embed').count()) === 0 && (await page.isVisible('#link-open-x')));
+  if (mode === 'desktop') check(`${name}: compact header <= 72px`, intro.header <= 72, intro.header);
+  else check(`${name}: compact header <= 112px (two short rows at most)`, intro.header <= 112, intro.header);
+  check(`${name}: Previous/Next are disabled buttons with compact honest text (real empty registry)`, await page.evaluate(() => [...document.querySelectorAll('.site-nav button[data-gn]')].every((b) => /** @type {HTMLButtonElement} */ (b).disabled) && document.querySelectorAll('.site-nav a[data-gn]').length === 0));
+  await page.waitForTimeout(1500);
+  check(`${name}: nothing advances behind Intro (HUD still 100/30 after 1.5 s real time)`, (await tx(page, '#time-left')) === '30' && (await tx(page, '#hp-player')).endsWith('100'));
+  await page.click('#btn-start'); await waitState(page, 'playing');
+  check(`${name}: overlay and instruction absent in play`, await page.evaluate(() => !!document.getElementById('panel-intro')?.hidden && !document.getElementById('instr-play')));
   await page.keyboard.down('k'); await page.waitForTimeout(1000);
   const m = await geo(page); evidence[name] = m;
-  for (const k of ['hud', 'arena', 'cue', 'guard', 'punch', 'pause']) check(`${name}: ${k} inside the active view after Play (no manual scroll)`, m[k].x >= -0.5 && m[k].right <= m.vw + 0.5 && m[k].y >= -0.5 && m[k].bottom <= m.vh + 0.5, JSON.stringify(m[k]));
-  check(`${name}: no horizontal overflow; thumb controls >= 64px; Pause >= 44px`, m.sw <= m.vw && m.guard.h >= 64 && m.punch.h >= 64 && m.pause.h >= 44);
-  if (mode === 'portrait') check(`${name}: arena >= 296 wide and >= 210 high`, m.arena.w >= 296 && m.arena.h >= 210, `${m.arena.w}x${m.arena.h}`);
+  for (const k of ['hud', 'arena', 'cue', 'guard', 'punch', 'pause', 'restart']) check(`${name}: ${k} inside the active view after Start (no manual scroll)`, m[k].x >= -0.5 && m[k].right <= m.vw + 0.5 && m[k].y >= -0.5 && m[k].bottom <= m.vh + 0.5, JSON.stringify(m[k]));
+  check(`${name}: no horizontal overflow; thumb controls >= 64px; Pause and Restart >= 44px`, m.sw <= m.vw && m.guard.h >= 64 && m.punch.h >= 64 && m.pause.h >= 44 && m.restart.h >= 44);
+  if (mode === 'portrait') check(`${name}: arena >= 296 wide, = clamp(210, 40svh, 360) high; Pause/Restart below the thumbs`, m.arena.w >= 296 && Math.abs(m.arena.h - Math.min(360, Math.max(210, h * 0.4))) <= 1 && m.pause.y >= m.guard.bottom && m.restart.y >= m.guard.bottom, `${m.arena.w}x${m.arena.h}`);
   if (mode === 'landscape') check(`${name}: arena >= 200 high; 104-128px rail on the right`, m.arena.h >= 200 && m.guard.w >= 104 && m.guard.w <= 128 && m.guard.x >= m.arena.right, JSON.stringify(m.arena));
-  if (mode === 'desktop') check(`${name}: full 1120px panel, arena ~346 high`, Math.abs(m.arena.w - 1120) <= 1 && Math.abs(m.arena.h - 346) <= 2, `${m.arena.w}x${m.arena.h}`);
+  if (mode === 'desktop') check(`${name}: full 1120px panel, arena ~374 high`, Math.abs(m.arena.w - 1120) <= 1 && Math.abs(m.arena.h - 374) <= 2, `${m.arena.w}x${m.arena.h}`);
   check(`${name}: WIND-UP label and progress visible at ~1 s`, (await page.isVisible('#windup-wrap')) && /WIND-UP/.test(await tx(page, '#windup-wrap')));
   await page.waitForTimeout(550);
   check(`${name}: BLOCK cue and COUNTER NOW after the guarded first strike`, /BLOCK/.test(await tx(page, '#cue')) && (await page.isVisible('#counter-badge')));
@@ -97,16 +108,18 @@ async function active(browser, name, w, h, mode) {
 async function desktopFlow(browser) {
   const { context, page } = await pageFor(browser, { viewport: { width: 1280, height: 720 } }, 'flow');
   await page.goto(`${DRAFT}/`);
-  check('root opens the labeled preview candidate', (await tx(page, 'nav a[aria-current="page"]')) === LABEL && (await page.isVisible('.preview-banner')));
+  check('root opens the labeled preview candidate', (await tx(page, 'nav a[aria-current="page"]')).startsWith(LABEL) && (await page.isVisible('.preview-badge')));
   await Promise.all([page.waitForURL(`${DRAFT}${GAME}`), page.click('nav a[aria-current="page"]')]);
   await page.reload(); check('refresh keeps the dated route at Intro', (await st(page)) === 'intro');
-  await Promise.all([page.waitForURL(`${DRAFT}/`), page.click('nav a.brand')]); await page.goBack(); await page.waitForURL(`${DRAFT}${GAME}`);
+  await Promise.all([page.waitForURL(`${DRAFT}/`), page.click('.site-header a.brand')]); await page.goBack(); await page.waitForURL(`${DRAFT}${GAME}`);
   check('back returns to Intro', (await st(page)) === 'intro');
   const r404 = await page.goto(`${DRAFT}${UNKNOWN}`); check('browser: unknown date HTTP 404, honest page', r404?.status() === 404 && /Page not found/.test(await tx(page, 'main')));
   await page.goto(`${DRAFT}${GAME}`);
-  await page.click('#btn-play'); await waitState(page, 'playing');
+  await page.click('#btn-start'); await waitState(page, 'playing');
   await page.keyboard.press('Escape'); check('Escape pauses with the dialog', (await st(page)) === 'paused' && (await page.isVisible('#dlg-pause')));
-  await page.click('#btn-restart'); await waitState(page, 'playing');
+  await page.click('#btn-restart');
+  check('Pause > Restart returns to a focused Intro (no countdown) with 100/30', (await st(page)) === 'intro' && (await page.evaluate(() => document.activeElement?.id)) === 'btn-start' && (await tx(page, '#time-left')) === '30');
+  await page.click('#btn-start'); await waitState(page, 'playing');
   const t0 = Date.now(); await page.keyboard.down('k');
   while ((await st(page)) === 'playing' && Date.now() - t0 < 40000) { if (await page.evaluate(() => !document.getElementById('counter-badge')?.hidden)) { await page.keyboard.press('Space'); await page.waitForTimeout(620); } else await page.waitForTimeout(10); }
   await page.keyboard.up('k');
@@ -114,6 +127,10 @@ async function desktopFlow(browser) {
   check('real-clock scripted win: headline, KO time, BEAT THE BUZZER, punchline, 80/0 HP, Retry/Share', head === 'KO! You beat the 30-second headline.' && /KO time: \d+\.\d\ds/.test(await tx(page, '#result-time')) && (await tx(page, '.stamp-line')).includes('BEAT THE BUZZER') && (await tx(page, '#payoff .punchline')) === 'Headline speedrun complete. The timeline can wait.' && /You: 80 HP · Jack: 0 HP/.test(await tx(page, '#result-health')) && (await page.isEnabled('#btn-retry')) && (await page.isEnabled('#btn-share')), head);
   check('pre-release share is link-free', (await tx(page, '#btn-share')) === 'Copy result' && /Link sharing is off/.test(await tx(page, '#share-note')));
   await page.screenshot({ path: join(process.env.TMPDIR || '/tmp', 'verify-hosted-desktop-win.png'), fullPage: true });
+  await page.click('#btn-retry');
+  check('Retry after the win returns to a focused Intro (no countdown) with 100/30, overlay visible', (await st(page)) === 'intro' && (await page.evaluate(() => document.activeElement?.id)) === 'btn-start' && (await tx(page, '#time-left')) === '30' && (await page.isVisible('#panel-intro')));
+  await page.keyboard.press('Space'); await page.waitForTimeout(300);
+  check('Space with Start focused starts exactly one countdown (native activation)', (await st(page)) === 'countdown');
   await context.close();
 }
 

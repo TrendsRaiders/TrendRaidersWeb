@@ -1,4 +1,4 @@
-// r5 automatic source-post embed. The provider here is a MOCK served through request interception: these tests prove our
+// r6 automatic source-post embed (unchanged from r5 except for the r6 page structure). The provider here is a MOCK served through request interception: these tests prove our
 // integration, fallback, retry and race handling only. Real provider rendering is checked separately by
 // scripts/real-embed-check.mjs (npm run check:embed-real).
 import { test, before, after } from 'node:test';
@@ -20,7 +20,7 @@ const retryVisible = (page) => page.isVisible('#btn-retry-embed');
 const iframes = (page) => page.evaluate(() => [...document.querySelectorAll('#embed-mount iframe')].map((f) => f.title));
 const settle = (page, n, kind) => page.evaluate(([i, k]) => window.__settle[i](k), [n, kind]);
 const rects = (page, sels) => page.evaluate((list) => Object.fromEntries(list.map((s) => { const r = document.querySelector(s).getBoundingClientRect(); return [s, [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10)]; })), sels);
-const PLAY_SELS = ['.panel-head', '#hud', '#arena', '#cuebar', '#instr-play', '#btn-guard', '#btn-punch', '#btn-pause'];
+const PLAY_SELS = ['.panel-head', '#hud', '#arena', '#cuebar', '#btn-restart-play', '#btn-guard', '#btn-punch', '#btn-pause'];
 
 test('automatic: one attempt at mount with no click or scroll; exact id/options; notice, summary and link visible; no Load button', async () => {
   const g = await openGame(env, { viewport: { width: 320, height: 568 }, provider: 'deferred' });
@@ -229,7 +229,7 @@ test('navigation: leaving and returning starts at most one new attempt, ignores 
   const g = await openGame(env, { viewport: { width: 390, height: 844 }, provider: 'deferred' });
   const { page } = g;
   assert.ok(await until(async () => (await calls(page)).length === 1));
-  await Promise.all([page.waitForURL(`${env.host.origin}/`), page.click('nav a.brand')]); // preview root = the same candidate page
+  await Promise.all([page.waitForURL(`${env.host.origin}/`), page.click('header a.brand')]); // preview root = the same candidate page
   await page.goBack();
   await page.waitForURL(`${env.host.origin}/games/2026-10-17/`);
   assert.equal(await state(page), 'intro');
@@ -266,7 +266,7 @@ test('320px layout, fallback and loaded: no horizontal overflow, embed within it
     assert.ok(m.sw <= m.iw && m.cardL >= 0 && m.cardR <= m.iw, JSON.stringify(m));
     assert.ok(m.mountR <= m.cardR + 0.5 && (!m.iframeR || m.iframeR <= m.cardR + 0.5), `embed within card ${JSON.stringify(m)}`);
     assert.ok(m.gameBottom <= m.newsTop, 'embed lives below the play panel');
-    assert.equal(await page.evaluate(() => document.activeElement === document.body), true, 'nothing stole focus');
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'btn-start', 'nothing stole focus from the focused Start round button');
     assert.deepEqual(g.problems.filter((p) => !(mode === 'blocked' && /widgets\.js|ERR_BLOCKED_BY_CLIENT/.test(p))), []);
     await g.context.close();
   }

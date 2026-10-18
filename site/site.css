@@ -29,19 +29,50 @@ a { color: #ffd08a; }
 main { max-width: 1120px; margin: 0 auto; padding: 0.5rem 0 2rem; }
 @media (min-width: 900px) { body { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); } }
 
-.preview-banner {
-  margin: 0 -12px; padding: 0.5rem 12px; text-align: center;
-  background: #ffe066; color: #1a1400; font-weight: 800; border-bottom: 3px solid #1a1400;
+/* Minimal header: identity, compact preview status, one labeled navigation. Normal flow, never sticky.
+   Phones (<600px) use at most TWO short rows: [Preview badge | Other dates chooser] and [Previous | selected date | Next]. */
+.site-header { padding-top: max(6px, env(safe-area-inset-top)); }
+.hdr { position: relative; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 12px; max-width: 1120px; margin: 0 auto; }
+.ident { display: flex; flex: 1 1 100%; align-items: center; gap: 8px; min-height: 44px; }
+.hdr.has-others .ident { padding-right: 128px; }
+.hdr.has-others .brand { display: none; } /* the optional identity is dropped on phones only when the date chooser needs the row */
+.brand { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-weight: 800; font-size: 0.8125rem; letter-spacing: 0.02em; text-transform: uppercase; text-decoration: none; }
+.preview-badge { background: #ffe066; color: #1a1400; font-weight: 800; font-size: 0.8125rem; padding: 2px 6px; border: 2px solid #1a1400; }
+.site-nav { flex: 1 1 100%; min-width: 0; }
+.site-nav ul { list-style: none; margin: 0; padding: 0; }
+.site-nav .steps { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 6px; align-items: stretch; }
+.site-nav .steps > li { min-width: 0; display: flex; }
+.site-nav .steps > li.empty { grid-column: 1 / -1; color: var(--muted); font-size: 0.9rem; align-self: center; }
+.gn-link, .date-link {
+  display: flex; flex-direction: column; justify-content: center; min-height: 44px; min-width: 44px; width: 100%; max-width: 100%;
+  padding: 2px 6px; border: 2px solid var(--line); border-radius: 2px; background: var(--panel); color: var(--fg);
+  font: inherit; font-size: 0.95rem; font-weight: 700; line-height: 1.15; text-decoration: none; overflow-wrap: anywhere; text-align: center;
 }
-.site-nav { padding-top: max(0.5rem, env(safe-area-inset-top)); }
-.site-nav ul { list-style: none; margin: 0 auto; padding: 0; max-width: 46rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
-.site-nav a {
-  display: inline-block; min-height: 44px; padding: 0.55rem 0.8rem; border: 2px solid var(--line);
-  border-radius: 2px; color: var(--fg); text-decoration: none; font-weight: 600; overflow-wrap: anywhere;
+.gn-link small { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--muted); }
+.gn-link:disabled { color: var(--muted); border-style: dashed; cursor: not-allowed; }
+.date-link[aria-current="page"] { background: var(--accent); color: #1a1400; border-color: var(--accent); }
+.pv { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* bounded date chooser: native details, dropdown list scrolls inside a fixed height */
+.others { position: absolute; top: 0; right: 0; z-index: 6; }
+.others > summary { display: flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 2px 10px; border: 2px solid var(--line); background: var(--panel); color: var(--fg); font-weight: 700; font-size: 0.95rem; cursor: pointer; list-style: none; }
+.others > summary::-webkit-details-marker { display: none; }
+.others > summary::after { content: " ▾"; }
+.others[open] > summary::after { content: " ▴"; }
+.others > ul { position: absolute; right: 0; top: calc(100% + 4px); display: grid; gap: 8px; width: max-content; min-width: 12rem; max-width: calc(100vw - 24px); max-height: 50vh; overflow-y: auto; padding: 8px; background: var(--bg); border: 2px solid var(--line); }
+@media (min-width: 600px) {
+  .pv { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; white-space: normal; }
+  .hdr.has-others .brand { display: inline-flex; }
+  .site-nav .steps { display: flex; justify-content: flex-start; }
+  .site-nav .steps > li.cur { flex: 0 1 auto; }
+  .gn-link { width: auto; }
+  .date-link { width: auto; }
+  .gn-link, .date-link { padding: 2px 10px; }
 }
-.site-nav a.brand { border-color: transparent; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
-.site-nav a[aria-current="page"] { background: var(--accent); color: #1a1400; border-color: var(--accent); }
-.site-nav .empty { color: var(--muted); font-size: 0.9rem; }
+@media (min-width: 1000px) {
+  .ident { flex: 0 0 auto; padding-right: 0; }
+  .site-nav { flex: 1 1 auto; display: flex; align-items: flex-start; gap: 8px; }
+  .others { position: relative; }
+}
 
 .btn {
   font: inherit; font-weight: 700; color: var(--fg); background: var(--panel); border: 2px solid var(--line);
@@ -52,15 +83,4 @@ main { max-width: 1120px; margin: 0 auto; padding: 0.5rem 0 2rem; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .notice, .not-found { border: 2px solid var(--line); border-radius: 2px; padding: 0.75rem 1rem; background: var(--panel); }
 
-.game-nav { margin: 0.5rem 0; }
-.game-nav .gn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-.gn-item { display: grid; gap: 0.2rem; align-content: start; min-width: 0; }
-.gn-item.next { text-align: right; justify-items: end; }
-.gn-link {
-  display: inline-flex; flex-direction: column; justify-content: center; min-height: 48px; min-width: 44px; max-width: 100%;
-  padding: 0.35rem 0.7rem; border: 2px solid var(--line); border-radius: 2px; background: var(--panel); color: var(--fg);
-  font: inherit; font-weight: 700; text-decoration: none; text-align: inherit;
-}
-.gn-link small { display: block; font-weight: 600; color: var(--muted); }
-.gn-link:disabled { color: var(--muted); border-style: dashed; cursor: not-allowed; }
-.gn-note { color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.site-footer { max-width: 1120px; margin: 8px auto 0; padding: 8px 0 20px; border-top: 2px solid var(--line); }

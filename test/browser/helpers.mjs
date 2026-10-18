@@ -96,7 +96,7 @@ export const text = (page, sel) => page.textContent(sel).then((s) => (s || '').t
 export const hp = async (page) => [Number(await text(page, '#hp-player')), Number(await text(page, '#hp-enemy'))].map((n) => n);
 
 export async function startFight(page) {
-  await page.click('#btn-play');
+  await page.click('#btn-start');
   // Step by frames so simulation time 0 is within one frame of the first assertion.
   for (let i = 0; i < 400 && (await state(page)) !== 'playing'; i++) await page.clock.runFor(16);
   if ((await state(page)) !== 'playing') throw new Error('fight did not start');

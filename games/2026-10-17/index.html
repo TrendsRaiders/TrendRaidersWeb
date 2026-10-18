@@ -19,20 +19,17 @@
   {{banner}}
   {{nav}}
   <main id="main">
-    <h1 id="game-title">30-Second KO</h1>
-    <p class="edition-date">Edition date: <time datetime="2026-10-17">17 October 2026 (UTC)</time></p>
-
     {{gamenav}}
 
     <section id="game" class="play-panel" aria-labelledby="game-title">
       <noscript><p class="notice">30-Second KO needs JavaScript. The news recap below is readable without it.</p></noscript>
       <div class="panel-head">
-        <p class="panel-date" id="panel-date"><time datetime="2026-10-17">17 Oct 2026</time></p>
-        <div class="panel-tools">
-          <button type="button" id="btn-pause" class="btn small" disabled>Pause</button>
-          <button type="button" id="btn-about" class="btn small">About</button>
-          <button type="button" id="btn-sound" class="btn small" aria-pressed="false">Sound: off</button>
-        </div>
+        <h1 id="game-title" class="panel-title">30-Second KO <span class="panel-date"><time datetime="2026-10-17"><span class="d-full">17 October 2026 (UTC)</span><span class="d-short" aria-hidden="true">17 Oct 2026 (UTC)</span></time></span></h1>
+      </div>
+      <div class="panel-tools" id="panel-tools">
+        <button type="button" id="btn-pause" class="btn small" disabled>Pause</button>
+        <button type="button" id="btn-restart-play" class="btn small">Restart</button>
+        <button type="button" id="btn-sound" class="btn small" aria-pressed="false">Sound: off</button>
       </div>
 
       <div id="app" class="app" data-state="intro" data-punch-requests="0">
@@ -61,6 +58,13 @@
             </div>
             <p id="placard" class="placard">30-SECOND HEADLINE CHALLENGE</p>
             <div id="countdown" class="countdown" hidden aria-hidden="true"></div>
+            <section id="panel-intro" class="intro" aria-labelledby="intro-heading" aria-describedby="intro-goal intro-keys intro-touch">
+              <h2 id="intro-heading" class="intro-heading">Ready?</h2>
+              <p id="intro-goal" class="intro-goal">Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
+              <p id="intro-keys" class="intro-keys"><strong>PUNCH:</strong> Space / J · <strong>GUARD:</strong> hold K / Shift · Esc: Pause</p>
+              <p id="intro-touch" class="intro-touch"><strong>PUNCH:</strong> tap · <strong>GUARD:</strong> hold</p>
+              <button type="button" id="btn-start" class="btn primary start" aria-describedby="intro-goal intro-keys intro-touch">Start round</button>
+            </section>
           </div>
 
           <div id="cuebar" class="cuebar">
@@ -74,24 +78,12 @@
           </div>
 
           <div class="rail">
-            <p id="instr-play" class="instr">Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
             <div id="controls" class="controls">
               <button type="button" id="btn-guard" class="ctl guard" aria-pressed="false">GUARD <span class="ctl-sub">— hold</span></button>
               <button type="button" id="btn-punch" class="ctl punch">PUNCH <span class="ctl-sub">— tap</span></button>
             </div>
           </div>
         </div>
-
-        <section id="panel-intro" class="panel" aria-labelledby="intro-heading">
-          <h2 id="intro-heading" tabindex="-1">Beat Jack inside 30 seconds</h2>
-          <p class="subhead">The headline lasted 30 seconds. Your rematch gets 30.</p>
-          <p class="instructions">Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
-          <p class="fine">Unofficial creator-boxing parody. Original fictionalized characters; not affiliated with or endorsed by any person or event.</p>
-          <div class="row">
-            <button type="button" id="btn-play" class="btn primary">Play</button>
-            <button type="button" class="btn" data-open-about>About</button>
-          </div>
-        </section>
 
         <section id="panel-result" class="panel" aria-labelledby="result-heading">
           <h2 id="result-heading" tabindex="-1">Result</h2>
@@ -108,7 +100,6 @@
           <div class="row">
             <button type="button" id="btn-retry" class="btn primary">Retry</button>
             <button type="button" id="btn-share" class="btn"></button>
-            <button type="button" class="btn" data-open-about>About</button>
           </div>
           <p id="share-note" class="fine"></p>
         </section>
@@ -137,6 +128,7 @@
       </section>
     </section>
   </main>
+  <footer class="site-footer"><button type="button" id="btn-about" class="btn">About</button></footer>
 </div>
 
 <div id="dlg-pause" class="dialog" role="dialog" aria-modal="true" aria-labelledby="pause-heading" hidden>
@@ -147,7 +139,6 @@
       <button type="button" id="btn-resume" class="btn primary">Resume</button>
       <button type="button" id="btn-restart" class="btn">Restart</button>
       <button type="button" id="btn-exit" class="btn">Exit</button>
-      <button type="button" class="btn" data-open-about>About</button>
     </div>
   </div>
 </div>
@@ -155,6 +146,7 @@
 <div id="dlg-about" class="dialog" role="dialog" aria-modal="true" aria-labelledby="about-heading" hidden>
   <div class="dialog-card">
     <h2 id="about-heading" tabindex="-1" data-modal-heading>About 30-Second KO</h2>
+    <p>The headline lasted 30 seconds. Your rematch gets 30.</p>
     <p>Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
     <ul>
       <li>When Jack raises a glove (WIND-UP), hold Guard. After BLOCK, the COUNTER window opens: tap Punch.</li>

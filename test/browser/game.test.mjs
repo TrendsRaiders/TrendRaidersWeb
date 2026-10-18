@@ -9,20 +9,27 @@ after(async () => { await env.close(); });
 
 const clean = (g) => assert.deepEqual(g.problems, []);
 
-test('intro: copy, preview framing, nav semantics, news readable before play without About', async () => {
+test('intro: overlay copy inside the arena, header/preview framing, news readable before play, About only in the footer', async () => {
   const g = await openGame(env);
   const { page } = g;
   assert.equal(await state(page), 'intro');
-  assert.match(await text(page, '#panel-intro'), /Block the hit\. Punch on COUNTER\. KO Jack before time runs out\./);
-  assert.match(await text(page, '#panel-intro'), /Unofficial creator-boxing parody\. Original fictionalized characters; not affiliated with or endorsed by any person or event\./);
-  assert.match(await text(page, '.preview-banner'), /Preview — not released/);
-  assert.equal(await page.getAttribute('nav[aria-label="Game editions"] a[aria-current="page"]', 'aria-current'), 'page');
+  const intro = await text(page, '#panel-intro');
+  assert.match(intro, /Ready\?/);
+  assert.match(intro, /Block the hit\. Punch on COUNTER\. KO Jack before time runs out\./);
+  assert.match(intro, /PUNCH: Space \/ J · GUARD: hold K \/ Shift · Esc: Pause/);
+  assert.match(intro, /PUNCH: tap · GUARD: hold/);
+  assert.doesNotMatch(intro, /Unofficial creator-boxing parody|About|headline lasted/, 'minimal overlay');
+  assert.equal(await page.evaluate(() => document.getElementById('arena').contains(document.getElementById('panel-intro'))), true);
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'btn-start', 'Start round is focused on entry');
+  assert.match(await text(page, '.preview-badge'), /Preview — not released/);
+  assert.equal(await page.getAttribute('nav[aria-label="Game navigation"] a[aria-current="page"]', 'aria-current'), 'page');
   assert.match(await text(page, 'nav a[aria-current="page"]'), /17 Oct 2026 — Preview \(not released\)/);
-  assert.match(await text(page, '.edition-date'), /17 October 2026 \(UTC\)/);
+  assert.match(await text(page, '#game-title'), /30-Second KO\s*17 October 2026 \(UTC\)/);
   assert.equal(await page.isVisible('#news'), true);
   assert.match(await text(page, '#news h2'), /^News behind the game$/);
   assert.equal(await page.getAttribute('#news a', 'href'), 'https://twitter.com/FearedBuck/status/2111278238253342868');
   assert.equal(await page.isVisible('#dlg-about'), false);
+  assert.equal(await page.evaluate(() => !document.querySelector('.site-header').textContent.includes('About') && document.querySelector('footer #btn-about') !== null), true, 'About lives only in the footer');
   clean(g);
   await g.context.close();
 });
@@ -32,7 +39,7 @@ test('intro: copy, preview framing, nav semantics, news readable before play wit
 test('countdown: inputs ignored, no time or damage; then 100/100 and 30s', async () => {
   const g = await openGame(env);
   const { page } = g;
-  await page.click('#btn-play');
+  await page.click('#btn-start');
   assert.equal(await state(page), 'countdown');
   assert.equal(await text(page, '#countdown'), '3');
   await page.keyboard.down('k');
@@ -96,8 +103,11 @@ test('loss, timeout draw and Retry reset', async () => {
   assert.match(await text(page, '#result-time'), /Knocked out at 9\.0\d?s/);
   assert.equal(await inside(page, '#panel-result'), true, 'focus moves to the result');
   await page.click('#btn-retry');
-  assert.equal(await state(page), 'countdown');
+  assert.equal(await state(page), 'intro', 'Retry returns to Intro, not the countdown');
   assert.deepEqual(await hp(page), [100, 100]);
+  await page.clock.runFor(40000);
+  assert.deepEqual([await state(page), await text(page, '#time-left'), ...(await hp(page))], ['intro', '30', 100, 100], 'nothing advances behind Intro');
+  await page.click('#btn-start');
   await page.clock.runFor(3100);
   await page.keyboard.down('k');
   await page.clock.runFor(1500);
@@ -195,14 +205,15 @@ test('blur and hidden page auto-pause and require explicit Resume', async () => 
   await page.clock.runFor(5000);
   assert.deepEqual(await hp(page), [100, 100]);
   await page.click('#btn-restart');
-  assert.equal(await state(page), 'countdown');
+  assert.equal(await state(page), 'intro', 'Restart returns to Intro');
+  await page.click('#btn-start');
   await page.clock.runFor(3100);
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
   assert.equal(await state(page), 'paused');
-  await page.click('#btn-exit');
+  await Promise.all([page.waitForURL(`${env.host.origin}/`), page.click('#btn-exit')]); // Exit leaves for the landing route
   assert.equal(await state(page), 'intro');
   clean(g);
   await g.context.close();
@@ -244,25 +255,25 @@ test('About during held Guard: freezes, clears input, contains focus, inert back
   await g.context.close();
 });
 
-test('About from Intro and Result: focus restored to opener, state unchanged, Escape and Close both work', async () => {
+test('footer About from Intro and Result: opener focus restored, state unchanged, Escape and Close both work', async () => {
   const g = await openGame(env);
   const { page } = g;
-  await page.focus('#panel-intro [data-open-about]');
+  await page.focus('#btn-about');
   await page.keyboard.press('Space'); // Space still activates focused UI
   assert.equal(await page.isVisible('#dlg-about'), true);
   await page.keyboard.press('Escape');
-  assert.equal(await state(page), 'intro');
-  assert.equal(await page.evaluate(() => document.activeElement.closest('#panel-intro') !== null && document.activeElement.hasAttribute('data-open-about')), true);
-  await page.click('#btn-play');
+  assert.equal(await state(page), 'intro', 'About from Intro never starts the round');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'btn-about');
+  await page.click('#btn-start');
   await page.clock.runFor(3100);
   await page.clock.runFor(10000); // loss
   assert.equal(await state(page), 'result');
-  await page.focus('#panel-result [data-open-about]');
+  await page.focus('#btn-about');
   await page.keyboard.press('Enter');
   assert.equal(await page.isVisible('#dlg-about'), true);
   await page.click('#btn-about-close');
   assert.equal(await state(page), 'result');
-  assert.equal(await page.evaluate(() => document.activeElement.hasAttribute('data-open-about')), true);
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'btn-about');
   clean(g);
   await g.context.close();
 });
@@ -306,17 +317,19 @@ test('focus leaving the play region pauses; Pause button works; nav link click s
   await page.clock.runFor(100);
   assert.equal(await page.isVisible('#dlg-pause'), true);
   assert.equal(await page.getAttribute('#btn-guard', 'aria-pressed'), 'false');
-  await page.click('#btn-exit');
+  await page.click('#btn-restart');
+  assert.equal(await state(page), 'intro');
 
   await startFight(page);
   await page.click('#btn-pause');
   await page.clock.runFor(100);
   assert.equal(await state(page), 'paused');
   assert.equal(await page.isVisible('#dlg-pause'), true);
-  await page.click('#btn-exit');
+  await page.click('#btn-restart');
+  assert.equal(await state(page), 'intro');
 
   await startFight(page);
-  await page.click('nav a.brand'); // initiating link still performs its action
+  await page.click('.site-header a.brand'); // initiating link still performs its action
   await page.waitForURL(`${env.host.origin}/`);
   assert.equal(await state(page), 'intro', 'arrival at Intro, not a resumed fight');
   clean(g);
@@ -327,7 +340,7 @@ test('history: back/forward between routes shows the right content and Intro, ne
   const g = await openGame(env);
   const { page } = g;
   await startFight(page);
-  await page.click('nav a.brand');
+  await page.click('.site-header a.brand');
   await page.waitForURL(`${env.host.origin}/`);
   await page.goBack();
   await page.waitForURL(`${env.host.origin}${GAME}`);
@@ -371,7 +384,7 @@ test('320px keyboard traversal: every stop visible, in viewport, no trap', async
     assert.ok(info.visible && info.left >= 0 && info.right <= 320, `${info.id} inside viewport`);
     assert.ok(info.outline, `${info.id} has visible focus`);
   }
-  for (const needed of ['Skip to content', 'Trend Raiders', 'btn-about', 'btn-sound', 'btn-play', 'FearedBuck reporting']) {
+  for (const needed of ['Skip to content', 'Trend Raiders', 'btn-about', 'btn-sound', 'btn-start', 'FearedBuck reporting']) {
     assert.ok([...seen].some((s) => s.startsWith(needed) || s === needed), `reached ${needed}; saw ${[...seen]}`);
   }
   await g.context.close();

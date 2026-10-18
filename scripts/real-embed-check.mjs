@@ -1,4 +1,4 @@
-// Real-provider check for the AUTOMATIC X embed (r5: no Load gate; one attempt starts at page mount). Needs internet access to platform.twitter.com and uses the
+// Real-provider check for the AUTOMATIC X embed (r5/r6: no Load gate; one attempt starts at page mount). Needs internet access to platform.twitter.com and uses the
 // production CSP served by the same static host helper as the tests. NOT part of `npm test` (network-dependent).
 // It never claims success: it reports what the provider actually did in this run.
 //   node scripts/real-embed-check.mjs                 -> builds the preview locally, serves it with the production headers
@@ -44,7 +44,7 @@ try {
   report.origin = host.origin;
   report.cspHeader = nav?.headers()['content-security-policy'] ?? null;
   const origin = host.origin;
-  const rectsOf = () => page.evaluate(() => Object.fromEntries(['#game', '#hud', '#arena', '#btn-play'].map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return [s, r ? [r.x, r.y, r.width, r.height].map((v) => Math.round(v)) : null]; })));
+  const rectsOf = () => page.evaluate(() => Object.fromEntries(['#game', '#hud', '#arena', '#btn-start'].map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return [s, r ? [r.x, r.y, r.width, r.height].map((v) => Math.round(v)) : null]; })));
   // r5: NO click, scroll or key press anywhere in this check. One attempt must start by itself.
   report.noteInteraction = 'none: the page is only loaded, then observed';
   check('no Load control exists (automatic embed)', (await page.locator('#btn-load-embed').count()) === 0 && (await page.getByText('Load source post').count()) === 0, 'Load control found');
@@ -52,7 +52,7 @@ try {
   const stateEarly = await page.getAttribute('#embed-area', 'data-embed-state');
   check('summary and ordinary source link are visible while loading/failed (summary is replaced only by a displayed post)', (await page.isVisible('#link-open-x')) && (stateEarly === 'loaded' || ((await page.textContent('#embed-summary')) || '').startsWith('Source summary:')), stateEarly);
   const rectsMount = await rectsOf();
-  const focusAtMount = await page.evaluate(() => document.activeElement === document.body);
+  const focusAtMount = await page.evaluate(() => document.activeElement?.id === 'btn-start');
   const settled = await page.waitForFunction(() => ['loaded', 'failed'].includes(document.getElementById('embed-area')?.dataset.embedState ?? ''), null, { timeout: 20000 }).then(() => true, () => false);
   const stateNow = await page.getAttribute('#embed-area', 'data-embed-state');
   report.msToSettle = Date.now() - t0;
@@ -76,9 +76,9 @@ try {
   check('exactly one widgets.js request', ext.filter((r) => r.top && /\/widgets\.js/.test(r.url)).length === 1, ext.filter((r) => /widgets\.js/.test(r.url)).length);
   check('only the widgets.js inline CSP self-test <style> is blocked; no other CSP violation', report.violations.every(expected), report.violations.filter((v) => !expected(v)));
   check('top-document requests go only to platform.twitter.com', report.topFrameRequestHosts.every((/** @type {string} */ h) => h === 'platform.twitter.com'), report.topFrameRequestHosts);
-  const geo = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth, activeIsBody: document.activeElement === document.body, scrollY: scrollY }));
+  const geo = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth, activeIsBody: document.activeElement?.id === 'btn-start', scrollY: scrollY }));
   check('no horizontal overflow at 320px', geo.sw <= geo.iw, geo);
-  check('provider render/failure did not move focus or scroll the page', focusAtMount && geo.activeIsBody && geo.scrollY === 0, { focusAtMount, geo });
+  check('provider render/failure left focus on Start round and did not scroll the page', focusAtMount && geo.activeIsBody && geo.scrollY === 0, { focusAtMount, geo });
   check('play panel geometry unchanged by provider load (arena, HUD, Play)', JSON.stringify(await rectsOf()) === JSON.stringify(rectsMount), { before: rectsMount, after: await rectsOf() });
   if (stateNow === 'loaded') {
     check('official iframe is from platform.twitter.com', !!iframe && iframe.src.startsWith('https://platform.twitter.com/'), iframe);

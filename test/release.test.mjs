@@ -67,7 +67,7 @@ test('fixture archive: older routes are byte-identical after a later edition is 
   assert.equal(m.root, 'latest-released');
   assert.equal(read(after2, 'games/2026-01-05/app.js'), read(before, 'games/2026-01-05/app.js'));
   const old = read(after2, 'games/2026-01-05/index.html');
-  assert.match(old, /<a href="\/games\/2026-10-17\/">17 Oct 2026<\/a>/); // nav gains the new date...
+  assert.match(old, /href="\/games\/2026-10-17\/">17 Oct 2026</); // nav gains the new date...
   assert.match(old, /"shareUrl":"https:\/\/games\.example\.test\/games\/2026-01-05\/"/);
   const game = read(after2, 'games/2026-10-17/index.html');
   assert.match(game, /"shareUrl":"https:\/\/games\.example\.test\/games\/2026-10-17\/"/);
@@ -82,7 +82,7 @@ test('preview build keeps released editions and adds the candidate separately (n
   const game = read(dist, 'games/2026-10-17/index.html');
   assert.match(game, /"shareUrl":null/);
   assert.match(game, /Preview — not released/);
-  assert.match(game, /<a href="\/games\/2026-01-05\/">5 Jan 2026<\/a>/);
+  assert.match(game, /href="\/games\/2026-01-05\/">5 Jan 2026</);
   assert.doesNotMatch(read(dist, 'games/2026-01-05/index.html'), /aria-current="page">17/);
 });
 
@@ -137,15 +137,15 @@ test('r4: built pages link exact neighbor routes with date text and disable genu
   const dist = join(tmp, 'archive-nav');
   await build({ mode: 'preview', outDir: dist, gamesDir, releaseRegistry: registry([good('2026-10-10'), good('2026-10-24')]), previewRegistry: previewReg });
   const cand = read(dist, 'games/2026-10-17/index.html');
-  assert.match(cand, /<a class="gn-link" href="\/games\/2026-10-10\/" data-gn="prev"><span class="gn-text"><span aria-hidden="true">←<\/span> Previous game<\/span> <small>10 Oct 2026<\/small><\/a>/);
-  assert.match(cand, /<a class="gn-link" href="\/games\/2026-10-24\/" data-gn="next"><span class="gn-text">Next game <span aria-hidden="true">→<\/span><\/span> <small>24 Oct 2026<\/small><\/a>/);
+  assert.match(cand, /<a class="gn-link" href="\/games\/2026-10-10\/" data-gn="prev"><span class="gn-text"><span aria-hidden="true">←<\/span> Previous<span class="sr-only"> game<\/span><\/span> <small>10 Oct 2026<span class="sr-only"> UTC<\/span><\/small><\/a>/);
+  assert.match(cand, /<a class="gn-link" href="\/games\/2026-10-24\/" data-gn="next"><span class="gn-text">Next<span class="sr-only"> game<\/span> <span aria-hidden="true">→<\/span><\/span> <small>24 Oct 2026<span class="sr-only"> UTC<\/span><\/small><\/a>/);
   assert.doesNotMatch(cand, /href="\/games\/2026-10-20\/" data-gn/, 'unrelated preview is not a destination');
   const first = read(dist, 'games/2026-10-10/index.html');
   assert.match(first, /<button type="button" class="gn-link" disabled data-gn="prev">/);
-  assert.match(first, /No earlier released game/);
+  assert.match(first, /None earlier<span class="sr-only"> — No earlier released game<\/span>/);
   assert.match(first, /<a class="gn-link" href="\/games\/2026-10-24\/" data-gn="next">/, 'later released edition still reachable; candidate 17th is not');
   const last = read(dist, 'games/2026-10-24/index.html');
   assert.match(last, /href="\/games\/2026-10-10\/" data-gn="prev"/);
   assert.match(last, /<button type="button" class="gn-link" disabled data-gn="next">/);
-  assert.match(last, /No later released game/);
+  assert.match(last, /None later<span class="sr-only"> — No later released game<\/span>/);
 });

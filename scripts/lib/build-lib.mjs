@@ -57,8 +57,6 @@ export const CSP = CSP_DIRECTIVES.join('; ');
 const cspMeta = () => `<meta http-equiv="Content-Security-Policy" content="${esc(CSP)}">`;
 const HEADERS_FILE = `/*\n  Content-Security-Policy: ${CSP}; frame-ancestors 'none'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
 
-const longDate = (date) => shortDate(date);
-
 /**
  * Previous/Next from verified RELEASED editions only (strictly earlier / later by UTC date). The selected
  * edition, even a preview candidate, only anchors the comparison and is never a destination.
@@ -70,30 +68,44 @@ export function gameNeighbors(entries, currentDate) {
   return { prev, next };
 }
 
-function renderGameNav(entries, currentDate) {
-  const { prev, next } = gameNeighbors(entries, currentDate);
-  const item = (kind, date) => {
-    const arrow = kind === 'prev' ? '←' : '→';
-    const label = kind === 'prev' ? 'Previous game' : 'Next game';
-    const text = kind === 'prev' ? `<span aria-hidden="true">${arrow}</span> ${label}` : `${label} <span aria-hidden="true">${arrow}</span>`;
-    if (date) {
-      return `<div class="gn-item ${kind}"><a class="gn-link" href="/games/${date}/" data-gn="${kind}"><span class="gn-text">${text}</span> <small>${esc(longDate(date))}</small></a></div>`;
-    }
-    const note = kind === 'prev' ? 'No earlier released game' : 'No later released game';
-    return `<div class="gn-item ${kind}"><button type="button" class="gn-link" disabled data-gn="${kind}"><span class="gn-text">${text}</span></button><span class="gn-note">${note}</span></div>`;
-  };
-  return `<nav class="game-nav" aria-label="Game navigation"><div class="gn-row">${item('prev', prev)}${item('next', next)}</div></nav>`;
+const SR = (t) => `<span class="sr-only">${t}</span>`;
+
+/** One compact arrow item. Visible text is short; the accessible name spells out game, date/UTC and availability. */
+function arrowItem(kind, date) {
+  const arrow = kind === 'prev' ? '←' : '→';
+  const word = kind === 'prev' ? 'Previous' : 'Next';
+  const text = kind === 'prev' ? `<span aria-hidden="true">${arrow}</span> ${word}${SR(' game')}` : `${word}${SR(' game')} <span aria-hidden="true">${arrow}</span>`;
+  if (date) return `<li class="gn ${kind}"><a class="gn-link" href="/games/${date}/" data-gn="${kind}"><span class="gn-text">${text}</span> <small>${esc(shortDate(date))}${SR(' UTC')}</small></a></li>`;
+  const none = kind === 'prev' ? 'None earlier' : 'None later';
+  const full = kind === 'prev' ? 'No earlier released game' : 'No later released game';
+  return `<li class="gn ${kind}"><button type="button" class="gn-link" disabled data-gn="${kind}"><span class="gn-text">${text}</span> <small>${none}${SR(` — ${full}`)}</small></button></li>`;
 }
 
-function renderNav(entries, currentDate) {
-  const items = entries.length
-    ? entries.map((e) => {
-      const label = e.preview ? `${shortDate(e.date)} — Preview (not released)` : shortDate(e.date);
-      const cur = e.date === currentDate ? ' aria-current="page"' : '';
-      return `<li><a href="/games/${e.date}/"${cur}>${esc(label)}</a></li>`;
-    }).join('')
-    : '<li class="empty">No game editions are released yet.</li>';
-  return `<nav class="site-nav" aria-label="Game editions"><ul><li><a class="brand" href="/">Trend Raiders</a></li>${items}</ul></nav>`;
+/**
+ * Minimal header in normal flow: site identity, a compact preview status on drafts, and ONE labeled navigation
+ * (Previous / date chooser / Next). No About, tutorial, hero or share controls here.
+ * currentDate null = a page that is not an edition (404): date list only, no arrows.
+ */
+function renderHeader(entries, currentDate, mode) {
+  const cur = entries.find((e) => e.date === currentDate);
+  const badge = (cur ? cur.preview : mode === 'preview') ? '<span class="preview-badge" role="note">Preview — not released</span>' : '';
+  // Compact visible date on phones; the full "— Preview (not released)" text stays in the accessible name and is
+  // visible from 600px up (the draft status is also shown by the badge).
+  const dateLink = (e, current) => {
+    const pv = e.preview ? '<span class="pv"> — Preview (not released)</span>' : '';
+    return `<a class="date-link" href="/games/${e.date}/"${current ? ' aria-current="page"' : ''}>${esc(shortDate(e.date))}${pv}${SR(' UTC edition')}</a>`;
+  };
+  // The selected edition is always one real link in the arrow row. Every other date lives in a native, bounded
+  // <details> chooser (real links, no script), so the header never grows with the number of editions.
+  const others = entries.filter((e) => e.date !== currentDate);
+  const chooser = others.length
+    ? `<details class="others"><summary>${cur ? 'Other dates' : 'Available editions'}${SR(` (${others.length})`)}</summary><ul>${others.map((e) => `<li class="date">${dateLink(e, false)}</li>`).join('')}</ul></details>`
+    : '';
+  let steps;
+  if (cur) steps = `${arrowItem('prev', gameNeighbors(entries, currentDate).prev)}<li class="cur">${dateLink(cur, true)}</li>${arrowItem('next', gameNeighbors(entries, currentDate).next)}`;
+  else steps = entries.length ? '' : '<li class="empty">No game editions are released yet.</li>';
+  const flag = chooser ? ' has-others' : '';
+  return `<header class="site-header"><div class="hdr${flag}"><div class="ident"><a class="brand" href="/">Trend Raiders</a>${badge}</div><nav class="site-nav" aria-label="Game navigation"><ul class="steps">${steps}</ul>${chooser}</nav></div></header>`;
 }
 
 function fill(tpl, vars) {
@@ -110,7 +122,7 @@ function notFoundPage(entries, mode) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Not found | Trend Raiders</title>${cspMeta()}<meta name="robots" content="noindex">
 <link rel="icon" href="data:,"><link rel="stylesheet" href="/assets/site.css"></head>
-<body>${mode === 'preview' ? '<p class="preview-banner">Preview — not released</p>' : ''}${renderNav(entries, null)}
+<body>${renderHeader(entries, null, mode)}
 <main id="main"><div class="not-found"><h1>Page not found</h1><p>There is no game edition at this address.</p>${list}<p><a href="/">Go to the home page</a></p></div></main></body></html>
 `;
 }
@@ -200,9 +212,9 @@ export async function build(o = {}) {
       title: esc(entry.preview ? `${meta.title} — Preview (not released)` : meta.title),
       description: esc(meta.description),
       robots: entry.preview ? '<meta name="robots" content="noindex">' : '',
-      banner: entry.preview ? '<p class="preview-banner" role="note">Preview — not released</p>' : '',
-      nav: renderNav(entries, entry.date),
-      gamenav: renderGameNav(entries, entry.date),
+      banner: '',
+      nav: renderHeader(entries, entry.date, mode),
+      gamenav: '',
       csp: cspMeta(),
       config,
     });

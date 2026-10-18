@@ -41,7 +41,7 @@ const cache = new Map();
 
 const modals = new ModalStack({
   page: $('page'),
-  fallback: () => (state === 'intro' ? $('btn-play') : state === 'result' ? $('btn-retry') : arena),
+  fallback: () => (state === 'intro' ? $('btn-start') : state === 'result' ? $('btn-retry') : arena),
   onChange: () => clearInputs(),
 });
 
@@ -67,7 +67,8 @@ function paint(canvas, frame) {
  * arena, so there are never side bars and nothing is stretched.
  */
 function fitArena() {
-  const W = arena.clientWidth; const H = arena.clientHeight;
+  const box = arena.getBoundingClientRect(); // fractional CSS sizes (svh) are rounded up so the art always covers the arena
+  const W = box.width; const H = box.height;
   if (!W || !H) return;
   const px = Math.max(1, Math.round((0.32 * H) / BOXER_H));
   const lw = Math.ceil(W / px); const lh = Math.ceil(H / px);
@@ -157,6 +158,7 @@ function setState(next) {
   guardBtn.setAttribute('aria-disabled', String(inert));
   punchBtn.setAttribute('aria-disabled', String(inert));
   arena.tabIndex = playing || next === 'countdown' ? 0 : -1;
+  $('panel-intro').hidden = next !== 'intro'; // removed from layout and the accessibility tree outside Intro
   ensureLoop();
 }
 
@@ -316,25 +318,46 @@ function autoPause() {
   if (state === 'playing' || state === 'countdown') pauseGame();
 }
 
-function resume() {
-  modals.close($('dlg-pause'));
-  startCountdown();
-}
-
-function restart() {
-  modals.closeAll();
-  newGame();
-  startCountdown();
-}
-
-function goIntro() {
+/**
+ * Entry/reset: every first entry, route return, Restart (play or Pause) and Retry (any outcome) land here. The round is
+ * reset immediately, the clock and AI do NOT start, and nothing but the Start button can begin it.
+ */
+function resetToIntro({ position = true } = {}) {
   modals.closeAll();
   pendingPauseDialog = false;
   stopRun();
   $('countdown').hidden = true;
   newGame();
   setState('intro');
-  $('intro-heading').focus();
+  if (position) positionPanel();
+  $('btn-start').focus({ preventScroll: true });
+  announce('Ready? Block the hit. Punch on COUNTER. Press Start round.');
+}
+
+/** Start round (click, touch or native Enter/Space on the button): position, clear held input, then the existing 3-2-1. */
+function startRound() {
+  if (state !== 'intro' || document.hidden) return;
+  positionPanel();
+  clearInputs();
+  newGame();
+  startCountdown();
+}
+
+function resume() {
+  modals.close($('dlg-pause'));
+  startCountdown();
+}
+
+function restart() {
+  resetToIntro();
+}
+
+function exitToLanding() {
+  modals.closeAll();
+  pendingPauseDialog = false;
+  stopRun();
+  clearInputs();
+  window.location.assign('/');
 }
 
 function openAbout(opener) {
@@ -503,19 +526,18 @@ function init() {
   document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('keyup', onKeyUp, true);
 
-  $('btn-play').addEventListener('click', () => { newGame(); startCountdown(); });
-  $('btn-retry').addEventListener('click', () => { newGame(); startCountdown(); });
+  $('btn-start').addEventListener('click', startRound);
+  $('btn-retry').addEventListener('click', () => resetToIntro());
+  $('btn-restart-play').addEventListener('click', () => resetToIntro());
   $('btn-pause').addEventListener('click', () => pauseGame());
   $('btn-resume').addEventListener('click', resume);
   $('btn-restart').addEventListener('click', restart);
-  $('btn-exit').addEventListener('click', goIntro);
+  $('btn-exit').addEventListener('click', exitToLanding);
   $('btn-share').addEventListener('click', onShare);
   $('btn-share-close').addEventListener('click', () => modals.close($('dlg-share')));
   $('btn-skip-anim').addEventListener('click', endPayoffAnim);
   $('btn-about-close').addEventListener('click', closeAbout);
-  document.querySelectorAll('[data-open-about], #btn-about').forEach((b) => {
-    b.addEventListener('click', () => openAbout(/** @type {HTMLElement} */ (b)));
-  });
+  $('btn-about').addEventListener('click', () => openAbout($('btn-about')));
   $('btn-sound').addEventListener('click', () => {
     soundOn = !soundOn;
     if (soundOn && !audio) { try { audio = new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)(); } catch { audio = null; } }
@@ -542,7 +564,7 @@ function init() {
   const embed = createEmbed({ area: $('embed-area'), status: $('embed-status'), mount: $('embed-mount'), retryButton: $('btn-retry-embed') });
   $('btn-retry-embed').addEventListener('click', () => embed.retry());
   window.addEventListener('pagehide', () => { clearInputs(); stopRun(); embed.suspend(); });
-  window.addEventListener('pageshow', (e) => { if (e.persisted) { goIntro(); embed.resume(); } });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) { resetToIntro({ position: false }); embed.resume(); } });
 
   fitArena();
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => { fitArena(); if ($('payoff').clientWidth) fitPayoff(); }).observe(arena);
@@ -558,6 +580,8 @@ function init() {
 
   newGame();
   setState('intro');
+  $('btn-start').focus({ preventScroll: true });
+  announce('Ready? Block the hit. Punch on COUNTER. Press Start round.');
   embed.start();
 }
 
