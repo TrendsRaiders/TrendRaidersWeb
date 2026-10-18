@@ -244,7 +244,7 @@ test('navigation: leaving and returning starts at most one new attempt, ignores 
 });
 
 test('unknown routes never contact the provider', async () => {
-  const g = await openGame(env, { route: '/games/2026-10-18/', provider: 'success' });
+  const g = await openGame(env, { route: '/games/2026-10-19/', provider: 'success' });
   await g.page.waitForTimeout(500);
   assert.equal(g.provider.scriptRequests, 0);
   assert.equal(await g.page.locator('script').count(), 0);

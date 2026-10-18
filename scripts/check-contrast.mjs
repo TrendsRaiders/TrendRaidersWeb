@@ -69,6 +69,44 @@ export const PAIRS = [
   ['arena frame vs page', line, bg, 3],
 ];
 
+// ---- Fly the Simulation (2026-10-18): text/UI pairs from game.css and sprite/scenery pairs read from art.js ----
+import { THEMES, FLY_A } from '../games/2026-10-18/js/art.js';
+const HOT = '#ffe14a'; const TAG = '#14141f'; const FLY_ARENA = '#0d1a2d';
+PAIRS.push(
+  ['fly: NEXT GAP tag text', TAG, HOT, 4.5],
+  ['fly: OLD tag text', '#ffffff', TAG, 4.5],
+  ['fly: WORLD UPDATED tag text', TAG, '#ffffff', 4.5],
+  ['fly: tag borders vs bright scenery', TAG, '#bfe5a0', 3],
+  ['fly: tag border (white) vs dark scenery', '#ffffff', FLY_ARENA, 3],
+  ['fly: strip cue text on page', HOT, bg, 4.5],
+  ['fly: Seams label on page', fg, bg, 4.5],
+  ['fly: progress tick outline vs page', fg, bg, 3],
+  ['fly: filled progress tick vs page', accent, bg, 3],
+  ['fly: held steering label', '#1a1400', accent, 4.5],
+  ['fly: steering border on page', fg, bg, 3],
+  ['fly: disabled steering label on panel', muted, panel, 4.5],
+  ['fly: utility label on panel', fg, panel, 4.5],
+  ['fly: utility border vs page', line, bg, 3],
+  ['fly: overlay text on panel', fg, panel, 4.5],
+  ['fly: overlay border vs dark arena', fg, FLY_ARENA, 3],
+  ['fly: Resume-room note on panel', HOT, panel, 4.5],
+  ['fly: copy textarea', '#000000', '#ffffff', 4.5],
+  ['fly: focus ring vs arena', focus, FLY_ARENA, 3],
+);
+// the fly must stand out from every scenery colour: body OR white outline reaches 3:1 against each background tile colour
+for (const [name, t] of Object.entries(THEMES)) {
+  const body = FLY_A.colors.b; const outline = FLY_A.colors.o;
+  for (const [ch, col] of Object.entries(t.bg.colors)) {
+    PAIRS.push([`fly sprite vs ${name} scenery "${ch}" (body or outline)`, ratio(body, col) >= ratio(outline, col) ? body : outline, col, 3]);
+  }
+  // wall body vs the scenery: the wall fill/line colour that is most visible against the scenery's lightest and darkest tiles
+  const wallCols = [...Object.values(t.wall.colors), t.shade, t.edge]; // fills plus the 1px outline and gap lips drawn at the wall boundary
+  for (const [ch, col] of Object.entries(t.bg.colors)) {
+    const best = wallCols.reduce((a, c) => (ratio(c, col) > ratio(a, col) ? c : a), wallCols[0]);
+    PAIRS.push([`fly wall vs ${name} scenery "${ch}" (strongest wall colour)`, best, col, 3]);
+  }
+}
+
 export function run() {
   return PAIRS.map(([name, a, b, min]) => ({ name, fg: a, bg: b, min, ratio: ratio(a, b), pass: ratio(a, b) >= min }));
 }

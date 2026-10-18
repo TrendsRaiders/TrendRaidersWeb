@@ -1,4 +1,4 @@
-// Real-provider check for the AUTOMATIC X embed (r5/r6: no Load gate; one attempt starts at page mount). Needs internet access to platform.twitter.com and uses the
+// Real-provider check for the AUTOMATIC X embed (one attempt starts at page mount; no Load gate), for either edition (--edition). Needs internet access to platform.twitter.com and uses the
 // production CSP served by the same static host helper as the tests. NOT part of `npm test` (network-dependent).
 // It never claims success: it reports what the provider actually did in this run.
 //   node scripts/real-embed-check.mjs                 -> builds the preview locally, serves it with the production headers
@@ -11,7 +11,26 @@ import { chromium } from 'playwright-core';
 import { build } from './lib/build-lib.mjs';
 import { serve } from '../test/helpers/static-server.mjs';
 
-const TWEET = '2111278238253342868';
+// Edition selection: --edition <UTC date> (default 2026-10-17, the original behavior). Each edition lists its own post,
+// disclosure/fallback copy and geometry selectors; the checks themselves are shared.
+const EDITIONS = {
+  '2026-10-17': {
+    tweet: '2111278238253342868', title: '30-Second KO',
+    privacy: 'This embedded post connects to X automatically. X may use cookies or other identifiers and download media.',
+    summaryStart: 'Source summary:', geometry: ['#game', '#hud', '#arena', '#btn-start'], focusId: 'btn-start',
+    failedNeeds: '#btn-retry-embed', failedText: null, timeoutMs: 10000,
+  },
+  '2026-10-18': {
+    tweet: '2111589148146749616', title: 'Fly the Simulation',
+    privacy: 'Official X post — loading may contact X and its media services and share network/device identifiers.',
+    summaryStart: 'Summary:', geometry: ['#game', '#strip', '#arena', '#btn-start', '#btn-up', '#btn-down', '#btn-pause'], focusId: 'BODY',
+    failedNeeds: null, failedText: 'Embed unavailable — read the source on X', timeoutMs: 8000,
+  },
+};
+const argEdition = process.argv.includes('--edition') ? process.argv[process.argv.indexOf('--edition') + 1] : '2026-10-17';
+const ED = /** @type {any} */ (EDITIONS)[argEdition];
+if (!ED) { console.error(`unknown --edition ${argEdition}; known: ${Object.keys(EDITIONS).join(', ')}`); process.exit(2); }
+const TWEET = ED.tweet;
 const argUrl = process.argv.includes('--url') ? process.argv[process.argv.indexOf('--url') + 1] : process.env.EMBED_URL;
 let tmp = '';
 let host;
@@ -26,7 +45,7 @@ if (argUrl) {
 }
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
 /** @type {{ tweetId: string, checks: { name: string, pass: boolean, detail?: any }[], [k: string]: any }} */
-const report = { tweetId: TWEET, target: argUrl ? 'hosted' : 'local preview build', origin: '', checks: [] };
+const report = { edition: argEdition, tweetId: TWEET, target: argUrl ? 'hosted' : 'local preview build', origin: '', checks: [] };
 const check = (name, pass, detail) => report.checks.push({ name, pass: !!pass, ...(pass ? {} : { detail }) });
 try {
   const context = await browser.newContext({ viewport: { width: 320, height: 568 } });
@@ -40,19 +59,20 @@ try {
   page.on('pageerror', (e) => pageErrors.push(`${(e.stack || '').includes('platform.twitter.com') ? 'provider-script' : 'OWN'}: ${e.message.slice(0, 100)}`));
   const t0 = Date.now();
   page.on('request', (r) => reqs.push({ ms: Date.now() - t0, url: r.url(), type: r.resourceType(), top: r.frame() === page.mainFrame() }));
-  const nav = await page.goto(`${host.origin}/games/2026-10-17/`);
+  const nav = await page.goto(`${host.origin}/games/${argEdition}/`);
   report.origin = host.origin;
   report.cspHeader = nav?.headers()['content-security-policy'] ?? null;
   const origin = host.origin;
-  const rectsOf = () => page.evaluate(() => Object.fromEntries(['#game', '#hud', '#arena', '#btn-start'].map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return [s, r ? [r.x, r.y, r.width, r.height].map((v) => Math.round(v)) : null]; })));
+  const rectsOf = () => page.evaluate((sels) => Object.fromEntries(sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return [s, r ? [r.x, r.y, r.width, r.height].map((v) => Math.round(v)) : null]; })), ED.geometry);
   // r5: NO click, scroll or key press anywhere in this check. One attempt must start by itself.
   report.noteInteraction = 'none: the page is only loaded, then observed';
   check('no Load control exists (automatic embed)', (await page.locator('#btn-load-embed').count()) === 0 && (await page.getByText('Load source post').count()) === 0, 'Load control found');
-  check('automatic-connection notice is visible', ((await page.textContent('.privacy')) || '').trim() === 'This embedded post connects to X automatically. X may use cookies or other identifiers and download media.', await page.textContent('.privacy'));
+  check('automatic-connection notice is visible', ((await page.textContent('.privacy')) || '').trim() === ED.privacy, await page.textContent('.privacy'));
   const stateEarly = await page.getAttribute('#embed-area', 'data-embed-state');
-  check('summary and ordinary source link are visible while loading/failed (summary is replaced only by a displayed post)', (await page.isVisible('#link-open-x')) && (stateEarly === 'loaded' || ((await page.textContent('#embed-summary')) || '').startsWith('Source summary:')), stateEarly);
+  check('summary and ordinary source link are visible while loading/failed (summary is replaced only by a displayed post)', (await page.isVisible('#link-open-x')) && (stateEarly === 'loaded' || ((await page.textContent('#embed-summary')) || '').startsWith(ED.summaryStart)), stateEarly);
   const rectsMount = await rectsOf();
-  const focusAtMount = await page.evaluate(() => document.activeElement?.id === 'btn-start');
+  const focusOf = () => page.evaluate(() => document.activeElement === document.body ? 'BODY' : document.activeElement?.id);
+  const focusAtMount = (await focusOf()) === ED.focusId;
   const settled = await page.waitForFunction(() => ['loaded', 'failed'].includes(document.getElementById('embed-area')?.dataset.embedState ?? ''), null, { timeout: 20000 }).then(() => true, () => false);
   const stateNow = await page.getAttribute('#embed-area', 'data-embed-state');
   report.msToSettle = Date.now() - t0;
@@ -76,17 +96,21 @@ try {
   check('exactly one widgets.js request', ext.filter((r) => r.top && /\/widgets\.js/.test(r.url)).length === 1, ext.filter((r) => /widgets\.js/.test(r.url)).length);
   check('only the widgets.js inline CSP self-test <style> is blocked; no other CSP violation', report.violations.every(expected), report.violations.filter((v) => !expected(v)));
   check('top-document requests go only to platform.twitter.com', report.topFrameRequestHosts.every((/** @type {string} */ h) => h === 'platform.twitter.com'), report.topFrameRequestHosts);
-  const geo = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth, activeIsBody: document.activeElement?.id === 'btn-start', scrollY: scrollY }));
+  const geo = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth, scrollY: scrollY }));
+  const activeIsSame = (await focusOf()) === ED.focusId;
   check('no horizontal overflow at 320px', geo.sw <= geo.iw, geo);
-  check('provider render/failure left focus on Start round and did not scroll the page', focusAtMount && geo.activeIsBody && geo.scrollY === 0, { focusAtMount, geo });
-  check('play panel geometry unchanged by provider load (arena, HUD, Play)', JSON.stringify(await rectsOf()) === JSON.stringify(rectsMount), { before: rectsMount, after: await rectsOf() });
+  check(`provider render/failure left focus on ${ED.focusId} (unchanged from mount) and did not scroll the page`, focusAtMount && activeIsSame && geo.scrollY === 0, { focusAtMount, activeIsSame, geo });
+  check('play panel geometry unchanged by provider load (arena, HUD/strip, controls)', JSON.stringify(await rectsOf()) === JSON.stringify(rectsMount), { before: rectsMount, after: await rectsOf() });
   if (stateNow === 'loaded') {
     check('official iframe is from platform.twitter.com', !!iframe && iframe.src.startsWith('https://platform.twitter.com/'), iframe);
     check('iframe fits the 320px card', !!iframe && iframe.w <= 320, iframe);
     await page.evaluate(() => document.getElementById('source-post')?.scrollIntoView());
     await page.screenshot({ path: process.env.EMBED_SHOT || join(tmpdir(), 'real-embed-320.png') });
   } else {
-    check('fallback shown with explicit retry (provider did not render)', await page.isVisible('#btn-retry-embed'), stateNow);
+    if (ED.failedNeeds) check('fallback shown with explicit retry (provider did not render)', await page.isVisible(ED.failedNeeds), stateNow);
+    if (ED.failedText) {
+      check('stable fallback text shown (provider did not render); no retry control', ((await page.textContent('#embed-status')) || '').trim() === ED.failedText && (await page.locator('#btn-retry-embed, #btn-load-embed').count()) === 0, await page.textContent('#embed-status'));
+    }
   }
   await context.close();
 } finally {

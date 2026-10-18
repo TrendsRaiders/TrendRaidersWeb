@@ -13,14 +13,21 @@ export const CHROMIUM = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
  * released: put the real candidate in a FIXTURE release registry (share-link tests).
  * fixture: { release: [dates], preview: [dates], stubs: [dates] } builds isolated, non-public neighbor editions
  *   (stub pages) next to the real candidate. Nothing here is ever a real release.
+ * realPreview: build with the repository's actual preview registry (both candidates, as staged). By default the boxing
+ *   suites keep their original single-candidate preview site (an explicit boxing-only preview registry), so they are unchanged.
  */
-export async function setup({ released = false, fixture = null } = {}) {
+export async function setup({ released = false, fixture = null, realPreview = false } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'tr-browser-'));
   const regPath = join(tmp, 'registry.json');
   const entry = (date) => ({ date, verified: true, sha: 'abc1234', origin: 'https://games.example.test', verification: 'fixture-only (browser test)' });
   const releaseDates = fixture ? fixture.release : released ? ['2026-10-17'] : [];
   writeFileSync(regPath, JSON.stringify({ schema: 1, editions: releaseDates.map(entry) }));
   const opts = { mode: /** @type {'preview'} */ ('preview'), outDir: join(tmp, 'dist'), releaseRegistry: regPath };
+  if (!fixture && !realPreview) {
+    const onlyBoxing = join(tmp, 'preview-boxing-only.json');
+    writeFileSync(onlyBoxing, JSON.stringify({ schema: 1, editions: [{ date: '2026-10-17' }] }));
+    Object.assign(opts, { previewRegistry: onlyBoxing });
+  }
   if (fixture) {
     const gamesDir = join(tmp, 'games');
     cpSync(join(ROOT, 'games'), gamesDir, { recursive: true });

@@ -356,7 +356,7 @@ test('history: back/forward between routes shows the right content and Intro, ne
 });
 
 test('unknown date: honest 404 with link to available editions, never aliased to the game', async () => {
-  const g = await openGame(env, { route: '/games/2026-10-18/' });
+  const g = await openGame(env, { route: '/games/2026-10-19/' });
   const { page } = g;
   assert.match(await text(page, 'main'), /Page not found/);
   assert.equal(await page.locator('#app').count(), 0);

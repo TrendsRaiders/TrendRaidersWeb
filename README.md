@@ -4,6 +4,8 @@ Static site, vanilla HTML/CSS/ES modules, no framework, no runtime dependencies,
 
 The repository also contains the *candidate* edition **30-Second KO** (`games/2026-10-17/`, spec r3). Its source and art live here, but it is published only by the explicit preview build, never by the normal build.
 
+The repository also contains a second *candidate*, **Fly the Simulation** (`games/2026-10-18/`, spec r1, UTC edition 2026-10-18): preview-only too, listed in `preview/registry.json` and never in `releases/registry.json`. See [docs/fly-the-simulation.md](docs/fly-the-simulation.md).
+
 ## Requirements and setup
 
 Node.js 20+. Dev dependencies (`typescript`, `playwright-core`, `@types/node`) are only for checks and browser tests; the build itself uses Node built-ins.
@@ -40,7 +42,10 @@ Every field is validated; an incomplete entry or one without source in `games/<d
 npm run check         # tsc --checkJs over games/**/js and scripts, plus the CSS contrast check
 npm test              # node:test: combat engine (fake clock), build/registry/routing/manifest, release fixtures
 npm run check:embed-real  # network: real X provider under the production CSP; automatic embed, no interaction (add `-- --url <origin>` for a hosted preview); not in test:all
-node scripts/verify-hosted.mjs --url <draft origin> --sha <commit>   # hosted draft verifier (manifest, headers, gameplay, active-view geometry)
+node scripts/verify-hosted.mjs --url <draft origin> --sha <commit>   # hosted draft verifier for the BOXING edition only (hardcodes 2026-10-17)
+node scripts/verify-hosted-fly.mjs --url <draft origin> --sha <commit> --out <outside repo>   # hosted draft verifier for Fly the Simulation (manifest, assets, _headers, preservation, gameplay, geometry)
+node scripts/capture-evidence.mjs --out <dir outside the repo>       # Fly screenshots + measurements at the five named viewports
+npm run check:embed-real -- --edition 2026-10-18                      # real provider check for either edition (default 2026-10-17)
 npm run test:browser  # real Chromium via playwright-core (default /usr/bin/chromium; override with CHROMIUM_PATH)
 npm run test:all      # all of the above
 ```
@@ -55,9 +60,11 @@ Details, coverage and limitations: [docs/thirty-second-ko.md](docs/thirty-second
 | `site/site.css` | Shared navigation/chrome styles |
 | `games/<date>/` | Edition source (`edition.json`, `index.html` template, assets) |
 | `games/2026-10-17/js/engine.js` | Deterministic combat simulation (no DOM) |
+| `games/2026-10-18/js/engine.js` | Deterministic seven-seam course and collision rules (no DOM) |
+| `games/2026-10-18/js/{art,render,main,embed,share}.js` | Fly pixel sprites, canvas painter, controller, automatic embed (8 s), plain-text copy |
 | `releases/registry.json` | Verified released editions (empty) |
 | `preview/registry.json` | Preview-only candidates |
-| `scripts/` | Build CLI and library |
+| `scripts/` | Build CLI and library; Fly verifier, evidence capture and scripted player in `scripts/lib/` |
 | `test/` | Node tests; `test/browser/` Chromium tests |
 
 ## Netlify

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  {{csp}}
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  {{robots}}
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/site.css">
+  <link rel="stylesheet" href="/games/2026-10-18/game.css">
+  <script type="application/json" id="site-config">{{config}}</script>
+  <script type="module" src="/games/2026-10-18/js/main.js"></script>
+</head>
+<body class="fly">
+<div id="page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  {{banner}}
+  {{nav}}
+  <main id="main">
+    <section id="game" class="play-panel" aria-labelledby="game-title" data-state="intro">
+      <h1 id="game-title" class="sr-only">Fly the Simulation — <time datetime="2026-10-18">18 October 2026 (UTC)</time></h1>
+      <noscript><p class="notice">Fly the Simulation needs JavaScript. The news recap, sources and About below are readable without it.</p></noscript>
+
+      <div id="strip" class="strip">
+        <p class="seams">Seams <span id="seam-count">0</span>/7</p>
+        <ol id="ticks" class="ticks" aria-hidden="true"><li></li><li></li><li></li><li></li><li></li><li></li><li></li></ol>
+        <p id="cue-text" class="cue-text" aria-hidden="true"></p>
+      </div>
+
+      <div id="play-region" class="play-region" role="group" aria-label="Play area: arena and steering controls">
+        <div id="arena" class="arena" tabindex="-1" role="group" aria-label="Fly the Simulation arena. Up and Down arrow keys or W and S steer. Escape pauses.">
+          <canvas id="scene" role="img" aria-label="Pixel scene: a cartoon fly flying right through walls with openings toward a banana" data-scale="1"></canvas>
+          <div id="tags" class="tags" aria-hidden="true">
+            <span id="tag-old" class="tag tag-old" hidden>OLD</span>
+            <span id="tag-next" class="tag tag-next" hidden>NEXT GAP</span>
+            <span id="tag-updated" class="tag tag-updated" hidden>WORLD UPDATED</span>
+          </div>
+
+          <section id="panel-intro" class="overlay intro" aria-labelledby="intro-heading">
+            <h2 id="intro-heading" class="ov-title">Fly the Simulation</h2>
+            <p id="intro-goal" class="intro-goal">Reach the banana. Follow the dashed gap when the world rebuilds.</p>
+            <p id="intro-keys" class="intro-keys">↑/↓ or W/S: steer</p>
+            <p id="intro-touch" class="intro-touch">Hold ▲ / ▼ to steer</p>
+            <button type="button" id="btn-start" class="btn primary start">Start</button>
+          </section>
+
+          <section id="panel-paused" class="overlay paused" aria-labelledby="paused-heading" hidden>
+            <h2 id="paused-heading" class="ov-title" tabindex="-1">Paused</h2>
+            <p>The course is frozen. Resume continues from here.</p>
+            <p id="room-note" class="room-note" hidden>More room needed — rotate or scroll to the play area.</p>
+            <div class="ov-row">
+              <button type="button" id="btn-resume" class="btn primary">Resume</button>
+              <button type="button" id="btn-restart-paused" class="btn">Restart</button>
+            </div>
+          </section>
+
+          <section id="panel-result" class="overlay result" aria-labelledby="result-heading" data-pos="bottom" hidden>
+            <h2 id="result-heading" class="ov-title" tabindex="-1">Result</h2>
+            <p id="result-copy" class="result-copy" hidden>WORLD: FAKE. LUNCH: REAL ENOUGH.</p>
+            <div class="ov-row">
+              <button type="button" id="btn-retry" class="btn primary">Retry</button>
+              <button type="button" id="btn-again" class="btn primary" hidden>Play again</button>
+              <button type="button" id="btn-copy" class="btn" hidden>Copy result</button>
+            </div>
+            <p id="copy-note" class="copy-note" hidden></p>
+            <textarea id="copy-text" class="copy-text" readonly rows="3" aria-label="Result text to copy" hidden></textarea>
+          </section>
+          <button type="button" id="btn-skip" class="btn skip-reveal" hidden>Skip reveal</button>
+        </div>
+
+        <div id="steer" class="steer">
+          <button type="button" id="btn-up" class="ctl" data-dir="up" disabled><span aria-hidden="true">▲</span> Fly up</button>
+          <button type="button" id="btn-down" class="ctl" data-dir="down" disabled><span aria-hidden="true">▼</span> Fly down</button>
+        </div>
+      </div>
+
+      <div id="utils" class="utils">
+        <button type="button" id="btn-pause" class="util" disabled><span class="u-ico" aria-hidden="true">❚❚</span><span class="u-txt">Pause</span></button>
+        <button type="button" id="btn-restart" class="util" disabled><span class="u-ico" aria-hidden="true">↻</span><span class="u-txt">Restart</span></button>
+      </div>
+      <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="news" class="news" aria-labelledby="news-heading">
+      <h2 id="news-heading">News behind the game</h2>
+      <p class="news-date"><strong>Source date 17 October 2026; edition 18 October 2026 UTC</strong></p>
+      <p class="news-body">On 17 October, Odyssey said it had placed a fruit-fly brain inside its Odyssey-3 world model and showed a demo it described as a fly navigating imagined worlds. CEO Oliver Cameron shared the demo with “Fly free lil’ buddy.” This game turns that premise into a fictional cartoon obstacle course: the rebuilding walls, banana escape and desktop reveal are our joke, not claims about the experiment.</p>
+      <h3 class="sources-heading">Sources</h3>
+      <ol class="sources">
+        <li><a href="https://twitter.com/odysseyml/status/2111589148146749616" rel="noopener noreferrer">Odyssey (@odysseyml), primary post</a>, <time datetime="2026-10-17T22:44:19Z">2026-10-17 22:44:19 UTC</time></li>
+        <li><a href="https://twitter.com/olivercameron/status/2111589310571147464" rel="noopener noreferrer">Oliver Cameron (@olivercameron)</a>, <time datetime="2026-10-17T22:44:57Z">2026-10-17 22:44:57 UTC</time></li>
+      </ol>
+
+      <section id="source-post" class="source-card" aria-labelledby="source-post-heading">
+        <h3 id="source-post-heading">Source post 1 — Odyssey on X</h3>
+        <p class="privacy">Official X post — loading may contact X and its media services and share network/device identifiers.</p>
+        <div id="embed-area" class="embed-area" data-embed-state="idle">
+          <p id="embed-summary" class="embed-summary">Summary: Odyssey posted on 17 October 2026 (22:44:19 UTC) about a fruit-fly brain placed in its Odyssey-3 world model and a demo of a fly navigating imagined worlds. This summary is not the embedded post.</p>
+          <p id="embed-status" class="embed-status" role="status"></p>
+          <div id="embed-mount" class="embed-mount"></div>
+        </div>
+        <p><a id="link-open-x" class="linkbtn" href="https://twitter.com/odysseyml/status/2111589148146749616" rel="noopener noreferrer">Open the Odyssey post on X</a></p>
+      </section>
+    </section>
+
+    <section id="about" class="about" aria-labelledby="about-heading">
+      <h2 id="about-heading">About Fly the Simulation</h2>
+      <p>A tiny cartoon fly wants a banana. Steer it up and down through seven walls, each with one opening. Three walls <strong>rebuild</strong> as they approach: the old opening fills in and the dashed <strong>NEXT GAP</strong> becomes the real one. Follow the dashed gap. Reach the banana at the end of the 20-second course.</p>
+      <ul>
+        <li>Keyboard: Up/W and Down/S steer, Escape pauses. Touch or mouse: hold <strong>Fly up</strong> or <strong>Fly down</strong>.</li>
+        <li>Any wall contact is a bonk; Retry returns to the intro. The course is the same every time: nothing is random.</li>
+        <li>Pause, Resume and Restart are below the arena. Resume waits until you release the Resume key or button.</li>
+        <li>Win sharing is optional: Copy result copies plain text, nothing is posted for you.</li>
+      </ul>
+      <p>This is an unofficial parody and a fictional cartoon. It is not affiliated with or endorsed by Odyssey or anyone named in the news, and it makes no claim about the experiment or about what flies, brains or simulations are. All art is original and there is no sound.</p>
+    </section>
+  </main>
+  <footer class="site-footer"><a id="link-about" class="footer-link" href="#about">About</a></footer>
+</div>
+</body>
+</html>

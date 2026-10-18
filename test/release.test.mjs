@@ -28,6 +28,9 @@ const registry = (editions) => {
   return p;
 };
 const read = (d, p) => readFileSync(join(d, p), 'utf8');
+// These fixture builds only contain the boxing source, so they use a boxing-only preview registry (the real one also lists 2026-10-18).
+const boxingOnlyPreview = join(tmp, 'preview-boxing-only.json');
+writeFileSync(boxingOnlyPreview, JSON.stringify({ schema: 1, editions: [{ date: '2026-10-17' }] }));
 
 test('registry validation rejects unverified or incomplete entries', () => {
   assert.doesNotThrow(() => validateReleaseRegistry({ schema: 1, editions: [good('2026-01-05')] }));
@@ -49,7 +52,7 @@ test('registry entry without edition source fails the build', async () => {
 
 test('fixture archive: released-only navigation, root = latest released, candidate stays hidden in public mode', async () => {
   const dist = join(tmp, 'archive-a');
-  const m = await build({ outDir: dist, gamesDir, releaseRegistry: registry([good('2026-01-05')]), previewRegistry: join(root, 'preview', 'registry.json') });
+  const m = await build({ outDir: dist, gamesDir, releaseRegistry: registry([good('2026-01-05')]), previewRegistry: boxingOnlyPreview });
   assert.equal(m.root, 'latest-released');
   assert.ok(existsSync(join(dist, 'games/2026-01-05/app.js')));
   assert.equal(existsSync(join(dist, 'games/2026-10-17')), false, 'candidate not published without release entry');
@@ -77,7 +80,7 @@ test('fixture archive: older routes are byte-identical after a later edition is 
 
 test('preview build keeps released editions and adds the candidate separately (never as released)', async () => {
   const dist = join(tmp, 'archive-c');
-  const m = await build({ mode: 'preview', outDir: dist, gamesDir, releaseRegistry: registry([good('2026-01-05')]), previewRegistry: join(root, 'preview', 'registry.json') });
+  const m = await build({ mode: 'preview', outDir: dist, gamesDir, releaseRegistry: registry([good('2026-01-05')]), previewRegistry: boxingOnlyPreview });
   assert.deepEqual(m.previewEditions, ['2026-10-17']);
   const game = read(dist, 'games/2026-10-17/index.html');
   assert.match(game, /"shareUrl":null/);
@@ -88,7 +91,7 @@ test('preview build keeps released editions and adds the candidate separately (n
 
 test('static host: direct routes, trailing-slash redirect, honest 404 for unknown dates', async () => {
   const dist = join(tmp, 'archive-d');
-  await build({ mode: 'preview', outDir: dist, gamesDir, releaseRegistry: registry([good('2026-01-05')]), previewRegistry: join(root, 'preview', 'registry.json') });
+  await build({ mode: 'preview', outDir: dist, gamesDir, releaseRegistry: registry([good('2026-01-05')]), previewRegistry: boxingOnlyPreview });
   const host = await serve(dist);
   try {
     const ok = await fetch(`${host.origin}/games/2026-10-17/`);
@@ -96,7 +99,7 @@ test('static host: direct routes, trailing-slash redirect, honest 404 for unknow
     assert.match(await ok.text(), /30-Second KO/);
     const redirected = await fetch(`${host.origin}/games/2026-10-17`, { redirect: 'manual' });
     assert.equal(redirected.status, 301);
-    const unknown = await fetch(`${host.origin}/games/2026-10-18/`);
+    const unknown = await fetch(`${host.origin}/games/2026-10-19/`);
     assert.equal(unknown.status, 404);
     const body = await unknown.text();
     assert.match(body, /Page not found/);
