@@ -2,10 +2,24 @@
   "name": "trendraidersweb",
   "version": "0.1.0",
   "private": true,
-  "description": "Trend Raiders web scaffold",
+  "description": "Trend Raiders web: static site with a scaffold root and the 30-Second KO candidate",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test \"test/*.test.mjs\""
+    "build:preview": "node scripts/build.mjs --preview",
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:browser": "node --test --test-concurrency=1 \"test/browser/*.test.mjs\"",
+    "check": "tsc -p tsconfig.json && node scripts/check-contrast.mjs",
+    "test:all": "npm run check && npm test && npm run test:browser",
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:embed-real": "node scripts/real-embed-check.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "playwright-core": "^1.64.1",
+    "typescript": "^7.0.2"
+  },
+  "type": "module"
 }

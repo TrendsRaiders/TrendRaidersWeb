@@ -1,12 +1,8 @@
-import { cp, rm, mkdir } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
+import { build } from './lib/build-lib.mjs';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const src = join(root, 'public');
-const out = join(root, 'dist');
-
-await rm(out, { recursive: true, force: true });
-await mkdir(out, { recursive: true });
-await cp(src, out, { recursive: true });
-console.log('Built public/ -> dist/');
+// `node scripts/build.mjs` = public build (editions in releases/registry.json: verified releases or pending public candidates; draft-only until approved).
+// `node scripts/build.mjs --preview` = explicit preview build (candidate shown, labeled not released).
+const mode = process.argv.includes('--preview') ? 'preview' : 'public';
+const manifest = await build({ mode });
+console.log(`Built ${mode} -> dist/ (root: ${manifest.root}, released: ${manifest.releasedEditions.length}, preview: ${manifest.previewEditions.length}, tree ${manifest.treeSha256.slice(0, 12)})`);
+console.log(`Source: ${manifest.source.commit ?? 'unknown'} — ${manifest.source.note}`);

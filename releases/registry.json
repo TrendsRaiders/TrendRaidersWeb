@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "comment": "PUBLIC build editions. Both entries are release CANDIDATES staged for an authorized draft: they are NOT verified releases and nothing here says a release happened. Until the gates pass this is DRAFT-ONLY: Exact-SHA PM acceptance, explicit human production approval of that exact SHA/destination AND the verified production safeguards in deployment.md are all required first; merging or publishing never grants approval. It does not permit a merge. There is no release timestamp: an edition date is not a release date. A verified release later replaces an entry with {verified:true, sha, origin, verification}.",
+  "editions": [
+    {
+      "date": "2026-10-17",
+      "verified": false,
+      "status": "candidate-pending-approval",
+      "sourceSha": "b7321bab07dc8fd21df0207d747dbdfa4d8e5acf",
+      "origin": "https://empty-site-7f987b.netlify.app",
+      "approval": "pending: exact-SHA PM acceptance and human production approval not yet given"
+    },
+    {
+      "date": "2026-10-18",
+      "verified": false,
+      "status": "candidate-pending-approval",
+      "sourceSha": "ef20ccb392005e0aef4325d4ede356cf79d571d9",
+      "origin": "https://empty-site-7f987b.netlify.app",
+      "approval": "pending: exact-SHA PM acceptance and human production approval not yet given"
+    }
+  ]
+}

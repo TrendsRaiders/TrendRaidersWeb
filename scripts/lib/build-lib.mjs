@@ -1,0 +1,267 @@
+// Static site builder. Modes:
+//   public  - only editions listed in releases/registry.json get routes/navigation (default). Entries are either verified
+//             releases or PENDING public candidates (staged for a draft only; not live, not approved).
+//             Listing an edition here is integration, never approval.
+//   preview - additionally exposes preview-registry candidates with conspicuous "not released" framing.
+import { cp, rm, mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { join, dirname, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+
+export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function shortDate(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+/**
+ * Validate the release registry. Two entry kinds, nothing is inferred:
+ *  - verified release:  { date, verified: true, sha, origin, verification }
+ *  - PUBLIC CANDIDATE (staged, NOT live, awaiting exact-SHA PM + human approval):
+ *      { date, verified: false, status: 'candidate-pending-approval', sourceSha, origin, approval }
+ *    A candidate entry makes the PUBLIC build include the edition (routes, nav, root, dated share URL) so the exact
+ *    artifact can be staged as a DRAFT and verified; it is not a claim that a release happened. Candidates stay
+ *    draft-only until exact-SHA PM acceptance, explicit human production approval of that exact SHA/destination AND the verified production safeguards in deployment.md are all required first; merging or publishing never grants approval.
+ *    There is deliberately NO release timestamp anywhere: an edition date is not a release date.
+ */
+export const CANDIDATE_STATUS = 'candidate-pending-approval';
+export function validateReleaseRegistry(reg) {
+  if (!reg || reg.schema !== 1 || !Array.isArray(reg.editions)) throw new Error('release registry: expected {schema:1, editions:[]}');
+  const seen = new Set();
+  for (const e of reg.editions) {
+    if (!DATE_RE.test(e.date || '')) throw new Error(`release registry: bad date ${JSON.stringify(e.date)}`);
+    if (seen.has(e.date)) throw new Error(`release registry: duplicate ${e.date}`);
+    seen.add(e.date);
+    if (!/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(e.origin || '')) throw new Error(`release registry: ${e.date} needs an https origin without path`);
+    if (e.verified === false) {
+      if (e.status !== CANDIDATE_STATUS) throw new Error(`release registry: ${e.date} is not verified:true and not a ${CANDIDATE_STATUS} entry`);
+      if (!/^[0-9a-f]{40}$/.test(e.sourceSha || '')) throw new Error(`release registry: ${e.date} candidate needs the full sourceSha of its game files`);
+      if (!e.approval || typeof e.approval !== 'string' || !/pending/i.test(e.approval)) throw new Error(`release registry: ${e.date} candidate needs an approval note that says it is pending`);
+      for (const k of ['releasedAt', 'released_at', 'publishedAt']) if (k in e) throw new Error(`release registry: ${e.date} must not carry ${k} (edition date is not a release date)`);
+      continue;
+    }
+    if (e.verified !== true) throw new Error(`release registry: ${e.date} is not verified:true`);
+    if (!/^[0-9a-f]{7,64}$/.test(e.sha || '')) throw new Error(`release registry: ${e.date} needs the verified build sha`);
+    if (!e.verification || typeof e.verification !== 'string') throw new Error(`release registry: ${e.date} needs a verification/authorization reference`);
+  }
+  return reg;
+}
+
+async function readJson(path) { return JSON.parse(await readFile(path, 'utf8')); }
+
+/**
+ * Content Security Policy for every page. Derived from the actual provider behavior (see docs/thirty-second-ko.md):
+ * the click-to-load X embed needs scripts and frames from platform.twitter.com only. No 'unsafe-inline',
+ * no wildcards. widgets.js's own inline CSP self-test <style> is intentionally left blocked (render still works).
+ */
+export const CSP_DIRECTIVES = [
+  "default-src 'self'",
+  "script-src 'self' https://platform.twitter.com",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  'frame-src https://platform.twitter.com',
+  "media-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+];
+export const CSP = CSP_DIRECTIVES.join('; ');
+const cspMeta = () => `<meta http-equiv="Content-Security-Policy" content="${esc(CSP)}">`;
+const HEADERS_FILE = `/*\n  Content-Security-Policy: ${CSP}; frame-ancestors 'none'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
+
+/**
+ * Previous/Next destinations come from the entries the build treats as published: verified releases and, in the PUBLIC
+ * build, pending public candidates (a prospective integration that is NOT live until the approval gates pass).
+ * Preview candidates (`preview: true`) are never destinations. The selected edition only anchors the comparison.
+ * Strictly earlier / later by UTC date; missing days are skipped.
+ */
+export function gameNeighbors(entries, currentDate) {
+  const released = entries.filter((e) => !e.preview).map((e) => e.date).sort();
+  const prev = released.filter((d) => d < currentDate).pop() ?? null;
+  const next = released.find((d) => d > currentDate) ?? null;
+  return { prev, next };
+}
+
+const SR = (t) => `<span class="sr-only">${t}</span>`;
+
+/** One compact arrow item. Visible text is short; the accessible name spells out game, date/UTC and availability. */
+function arrowItem(kind, date) {
+  const arrow = kind === 'prev' ? '←' : '→';
+  const word = kind === 'prev' ? 'Previous' : 'Next';
+  const text = kind === 'prev' ? `<span aria-hidden="true">${arrow}</span> ${word}${SR(' game')}` : `${word}${SR(' game')} <span aria-hidden="true">${arrow}</span>`;
+  if (date) return `<li class="gn ${kind}"><a class="gn-link" href="/games/${date}/" data-gn="${kind}"><span class="gn-text">${text}</span> <small>${esc(shortDate(date))}${SR(' UTC')}</small></a></li>`;
+  const none = kind === 'prev' ? 'None earlier' : 'None later';
+  const full = kind === 'prev' ? 'No earlier released game' : 'No later released game';
+  return `<li class="gn ${kind}"><button type="button" class="gn-link" disabled data-gn="${kind}"><span class="gn-text">${text}</span> <small>${none}${SR(` — ${full}`)}</small></button></li>`;
+}
+
+/**
+ * Minimal header in normal flow: site identity, a compact preview status on drafts, and ONE labeled navigation
+ * (Previous / date chooser / Next). No About, tutorial, hero or share controls here.
+ * currentDate null = a page that is not an edition (404): date list only, no arrows.
+ */
+function renderHeader(entries, currentDate, mode) {
+  const cur = entries.find((e) => e.date === currentDate);
+  const badge = (cur ? cur.preview : mode === 'preview') ? '<span class="preview-badge" role="note">Preview — not released</span>' : '';
+  // Compact visible date on phones; the full "— Preview (not released)" text stays in the accessible name and is
+  // visible from 600px up (the draft status is also shown by the badge).
+  const dateLink = (e, current) => {
+    const pv = e.preview ? '<span class="pv"> — Preview (not released)</span>' : '';
+    return `<a class="date-link" href="/games/${e.date}/"${current ? ' aria-current="page"' : ''}>${esc(shortDate(e.date))}${pv}${SR(' UTC edition')}</a>`;
+  };
+  // The selected edition is always one real link in the arrow row. Every other date lives in a native, bounded
+  // <details> chooser (real links, no script), so the header never grows with the number of editions.
+  const others = entries.filter((e) => e.date !== currentDate);
+  const chooser = others.length
+    ? `<details class="others"><summary>${cur ? 'Other dates' : 'Available editions'}${SR(` (${others.length})`)}</summary><ul>${others.map((e) => `<li class="date">${dateLink(e, false)}</li>`).join('')}</ul></details>`
+    : '';
+  let steps;
+  if (cur) steps = `${arrowItem('prev', gameNeighbors(entries, currentDate).prev)}<li class="cur">${dateLink(cur, true)}</li>${arrowItem('next', gameNeighbors(entries, currentDate).next)}`;
+  else steps = entries.length ? '' : '<li class="empty">No game editions are released yet.</li>';
+  const flag = chooser ? ' has-others' : '';
+  return `<header class="site-header"><div class="hdr${flag}"><div class="ident"><a class="brand" href="/">Trend Raiders</a>${badge}</div><nav class="site-nav" aria-label="Game navigation"><ul class="steps">${steps}</ul>${chooser}</nav></div></header>`;
+}
+
+function fill(tpl, vars) {
+  let out = tpl;
+  for (const [k, v] of Object.entries(vars)) out = out.split(`{{${k}}}`).join(v);
+  return out;
+}
+
+function notFoundPage(entries, mode) {
+  const list = entries.length
+    ? `<p>Available editions:</p><ul>${entries.map((e) => `<li><a href="/games/${e.date}/">${esc(shortDate(e.date))}${e.preview ? ' — Preview (not released)' : ''}</a></li>`).join('')}</ul>`
+    : '<p>No game editions are released yet.</p>';
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found | Trend Raiders</title>${cspMeta()}<meta name="robots" content="noindex">
+<link rel="icon" href="data:,"><link rel="stylesheet" href="/assets/site.css"></head>
+<body>${renderHeader(entries, null, mode)}
+<main id="main"><div class="not-found"><h1>Page not found</h1><p>There is no game edition at this address.</p>${list}<p><a href="/">Go to the home page</a></p></div></main></body></html>
+`;
+}
+
+async function listFiles(dir, base = dir) {
+  const out = [];
+  for (const name of (await readdir(dir)).sort()) {
+    const p = join(dir, name);
+    if ((await stat(p)).isDirectory()) out.push(...await listFiles(p, base));
+    else out.push(relative(base, p).split(sep).join('/'));
+  }
+  return out;
+}
+
+/** Local git attribution (never from hosting env). Dirty or unknown trees are not exact-SHA artifacts. */
+export function gitSource(cwd = ROOT) {
+  const git = (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  try {
+    const commit = git('rev-parse', 'HEAD').trim();
+    const dirty = git('status', '--porcelain', '--untracked-files=all').trim().length > 0;
+    return {
+      commit, dirty, exactShaArtifact: !dirty,
+      note: dirty ? 'UNCOMMITTED: built from a working tree with changes; not an exact-SHA artifact.' : 'Clean working tree at commit.',
+    };
+  } catch {
+    return { commit: null, dirty: true, exactShaArtifact: false, note: 'UNCOMMITTED/UNKNOWN: git metadata unavailable; not an exact-SHA artifact.' };
+  }
+}
+
+async function writeManifest(outDir, meta, o = {}) {
+  const files = [];
+  for (const path of await listFiles(outDir)) {
+    const buf = await readFile(join(outDir, path));
+    files.push({ path, bytes: buf.length, sha256: createHash('sha256').update(buf).digest('hex') });
+  }
+  const tree = createHash('sha256').update(files.map((f) => `${f.sha256}  ${f.path}\n`).join('')).digest('hex');
+  // `source` is attribution only; it is deliberately outside treeSha256, which hashes output files.
+  const manifest = { schema: 1, ...meta, source: o.source ?? gitSource(), treeSha256: tree, files };
+  await writeFile(join(outDir, 'build-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifest;
+}
+
+/**
+ * @param {{ mode?: 'public'|'preview', outDir?: string, gamesDir?: string, releaseRegistry?: string,
+ *   previewRegistry?: string, publicDir?: string, siteDir?: string, source?: object }} [o]
+ */
+export async function build(o = {}) {
+  const mode = o.mode ?? 'public';
+  if (mode !== 'public' && mode !== 'preview') throw new Error(`unknown mode ${mode}`);
+  const outDir = o.outDir ?? join(ROOT, 'dist');
+  const gamesDir = o.gamesDir ?? join(ROOT, 'games');
+  const publicDir = o.publicDir ?? join(ROOT, 'public');
+  const siteDir = o.siteDir ?? join(ROOT, 'site');
+  const allReleased = validateReleaseRegistry(await readJson(o.releaseRegistry ?? join(ROOT, 'releases', 'registry.json'))).editions;
+  // Pending public candidates are not verified releases: only the PUBLIC build treats them as published editions.
+  // The preview build ignores them so it keeps showing the labeled, noindex, link-free preview candidates.
+  const released = mode === 'preview' ? allReleased.filter((e) => e.status !== CANDIDATE_STATUS) : allReleased;
+  const releasedDates = new Set(released.map((e) => e.date));
+
+  /** @type {{date:string, preview:boolean, origin?:string}[]} */
+  const entries = released.map((e) => ({ date: e.date, preview: false, origin: e.origin }));
+  if (mode === 'preview') {
+    const pv = await readJson(o.previewRegistry ?? join(ROOT, 'preview', 'registry.json'));
+    for (const e of pv.editions || []) {
+      if (!DATE_RE.test(e.date || '')) throw new Error(`preview registry: bad date ${JSON.stringify(e.date)}`);
+      if (!releasedDates.has(e.date)) entries.push({ date: e.date, preview: true });
+    }
+  }
+  entries.sort((a, b) => a.date.localeCompare(b.date));
+
+  await rm(outDir, { recursive: true, force: true });
+  await mkdir(outDir, { recursive: true });
+  await cp(publicDir, outDir, { recursive: true });
+  await mkdir(join(outDir, 'assets'), { recursive: true });
+  await cp(join(siteDir, 'site.css'), join(outDir, 'assets', 'site.css'));
+
+  const pages = new Map();
+  for (const entry of entries) {
+    const src = join(gamesDir, entry.date);
+    let meta;
+    try { meta = await readJson(join(src, 'edition.json')); } catch { throw new Error(`edition ${entry.date}: missing source in ${src}`); }
+    if (meta.date !== entry.date) throw new Error(`edition ${entry.date}: edition.json date mismatch`);
+    const dest = join(outDir, 'games', entry.date);
+    await cp(src, dest, { recursive: true });
+    await rm(join(dest, 'index.html'));
+    await rm(join(dest, 'edition.json'));
+    const shareUrl = entry.preview ? null : `${entry.origin}/games/${entry.date}/`;
+    const config = JSON.stringify({ mode, date: entry.date, preview: entry.preview, shareUrl }).replace(/</g, '\\u003c');
+    const html = fill(await readFile(join(src, 'index.html'), 'utf8'), {
+      title: esc(entry.preview ? `${meta.title} — Preview (not released)` : meta.title),
+      description: esc(meta.description),
+      robots: entry.preview ? '<meta name="robots" content="noindex">' : '',
+      banner: '',
+      nav: renderHeader(entries, entry.date, mode),
+      gamenav: '',
+      csp: cspMeta(),
+      config,
+    });
+    pages.set(entry.date, html);
+    await writeFile(join(dest, 'index.html'), html);
+  }
+
+  // Root: latest released edition; a preview build may open the latest candidate (with its banner) instead.
+  let rootKind = 'scaffold';
+  const latestPreview = [...entries].reverse().find((e) => e.preview);
+  const latestReleased = [...entries].reverse().find((e) => !e.preview);
+  const rootEntry = mode === 'preview' && latestPreview ? latestPreview : latestReleased;
+  if (rootEntry) {
+    await writeFile(join(outDir, 'index.html'), /** @type {string} */ (pages.get(rootEntry.date)));
+    rootKind = rootEntry.preview ? 'preview-candidate' : 'latest-released';
+  }
+  await writeFile(join(outDir, '404.html'), notFoundPage(entries, mode));
+  await writeFile(join(outDir, '_headers'), HEADERS_FILE);
+
+  return writeManifest(outDir, {
+    mode,
+    root: rootKind,
+    releasedEditions: released.map((e) => (e.status === CANDIDATE_STATUS ? { date: e.date, status: e.status, sourceSha: e.sourceSha, origin: e.origin } : { date: e.date, sha: e.sha, origin: e.origin })),
+    previewEditions: entries.filter((e) => e.preview).map((e) => e.date),
+  }, o);
+}

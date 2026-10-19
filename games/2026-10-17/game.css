@@ -1,0 +1,195 @@
+/* 30-Second KO (r5): flat retro arcade UI. Solid fills and crisp outlines only; nothing translucent or layered.
+   Colors never carry meaning alone: numbers, labels and shapes accompany them. */
+.panel-title { margin: 0; font-size: 1.125rem; line-height: 1.2; font-weight: 800; }
+.panel-date { font-weight: 600; color: var(--muted); font-size: 0.9375rem; white-space: nowrap; }
+.d-full { display: none; }
+
+/* ---- play panel: one grid, recomposed per breakpoint (areas below) ---- */
+.play-panel {
+  display: grid; gap: 8px; margin: 4px 0 8px; scroll-margin-top: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "head" "hud" "arena" "cue" "rail" "tools" "panels";
+}
+.app, .play-region { display: contents; }
+.panel-head { grid-area: head; display: flex; align-items: center; min-height: 28px; }
+.panel-tools { grid-area: tools; display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start; align-items: center; margin-top: 8px; }
+.panel-tools .btn { min-height: 44px; min-width: 64px; padding: 0.3rem 0.7rem; font-size: 1rem; }
+/* r7: below 900px Pause is one real >=44x44 button whose visible treatment is only a 24x24 outlined pause-bars badge
+   (neutral, unfilled). The padding is inside the button itself: no pseudo-element or wrapper hit area. */
+.pause-btn { position: relative; display: grid; place-items: center; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+.pause-btn:disabled { cursor: not-allowed; }
+.pause-badge { display: flex; align-items: center; justify-content: center; gap: 4px; width: 24px; height: 24px; border: 2px solid var(--fg); background: transparent; }
+.pause-badge i { display: block; width: 4px; height: 12px; background: var(--fg); }
+.pause-label { display: none; }
+/* tools by state: Sound while stopped; Pause + Restart while a round is on */
+.play-panel[data-state="playing"] #btn-sound, .play-panel[data-state="countdown"] #btn-sound, .play-panel[data-state="paused"] #btn-sound { display: none; }
+.play-panel[data-state="intro"] #btn-pause, .play-panel[data-state="result"] #btn-pause,
+.play-panel[data-state="intro"] #btn-restart-play, .play-panel[data-state="result"] #btn-restart-play { display: none; }
+
+.hud { grid-area: hud; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; min-height: 44px; }
+.hud-side { display: grid; gap: 2px; min-width: 0; }
+.hud-side.right { text-align: right; }
+.hud-name { font-size: 0.875rem; font-weight: 700; color: var(--muted); line-height: 1.1; }
+.hud-row { display: flex; align-items: center; gap: 6px; }
+.hud-side.right .hud-row { flex-direction: row-reverse; }
+.hp-num { font-size: 1.25rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; min-width: 2.2ch; }
+.bar { flex: 1; height: 12px; border: 2px solid var(--fg); background: #000; }
+.bar-fill { height: 100%; width: 100%; background: var(--ok); }
+.bar-fill.enemy { background: var(--accent); margin-left: auto; }
+.hud-time { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; min-width: 3.2rem; line-height: 1; }
+
+/* ---- arena: full width, no side bars; the canvas is re-rendered for the arena's own pixel size ---- */
+.arena {
+  grid-area: arena; position: relative; width: 100%; --arena-h: clamp(210px, 40svh, 360px); height: var(--arena-h); overflow: hidden;
+  background: #0b0e1a; outline: 2px solid var(--line); outline-offset: -2px;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.stage { position: absolute; inset: 0; overflow: hidden; }
+.stage canvas { position: absolute; left: 0; top: 0; display: block; image-rendering: crisp-edges; image-rendering: pixelated; }
+/* Intro: a short, non-modal overlay INSIDE the inactive arena. While stopped the arena may grow (zoom/text size). */
+.play-panel[data-state="intro"] .arena { height: auto; min-height: var(--arena-h); display: grid; place-items: center; }
+.intro {
+  position: relative; z-index: 2; width: calc(100% - 8px); max-width: 520px; margin: 4px; padding: 6px 10px;
+  background: var(--panel); border: 2px solid var(--fg); display: grid; gap: 3px; font-size: 1rem; line-height: 1.2;
+}
+.intro[hidden] { display: none; }
+.intro p, .intro h2 { margin: 0; }
+.intro-heading { font-size: 1.25rem; line-height: 1.15; }
+.intro-goal { font-weight: 600; }
+.intro .start { min-height: 44px; width: 100%; margin-top: 2px; font-size: 1.0625rem; }
+.placard {
+  position: absolute; left: 0; top: 0; margin: 0; padding: 2px 8px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em;
+  background: #000; color: #ffd08a; pointer-events: none;
+}
+.art-fallback { position: absolute; inset: 0; background: #1d2440; display: flex; align-items: flex-end; justify-content: space-around; padding: 8% 12%; }
+.art-fallback[hidden] { display: none; }
+.fb-fig { display: grid; place-items: center; width: 22%; height: 55%; font-weight: 900; font-size: 1rem; color: #000; border: 3px solid #fff; }
+.fb-player { background: #2f6df0; color: #fff; }
+.fb-enemy { background: #d8d8e0; }
+.app[data-art="fallback"] #art { display: none; }
+.countdown {
+  position: absolute; left: 50%; top: 50%; width: 96px; height: 96px; margin: -48px 0 0 -48px; display: grid; place-items: center;
+  font-size: 3.5rem; font-weight: 900; background: #0b0e1a; color: #fff; border: 3px solid #fff;
+}
+.countdown[hidden], .windup-wrap[hidden], .counter-badge[hidden] { display: none; }
+
+/* ---- stable cue strip ---- */
+.cuebar {
+  grid-area: cue; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 48px; padding: 0 8px;
+  background: var(--panel); border: 2px solid var(--line); overflow: hidden;
+}
+.cue { flex: 1 1 auto; min-width: 0; font-size: 1.25rem; font-weight: 900; line-height: 1.05; color: #fff; }
+.cue-status { flex: 0 0 auto; display: flex; align-items: center; }
+.windup-wrap { width: 118px; }
+.windup-label { display: block; font-size: 1rem; font-weight: 900; line-height: 1.1; color: #ffd08a; letter-spacing: 0.04em; }
+.windup-bar { height: 8px; background: #000; border: 2px solid #ffd08a; }
+#windup-fill { height: 100%; width: 100%; background: #ffd08a; transform-origin: left; transform: scaleX(0); }
+.counter-badge { background: var(--accent); color: #1a1400; font-size: 1rem; font-weight: 900; padding: 4px 8px; border: 2px solid #fff; white-space: nowrap; }
+
+/* ---- thumb rail: instruction + controls ---- */
+.rail { grid-area: rail; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ctl {
+  min-height: 72px; min-width: 56px; font: inherit; font-size: 1.125rem; font-weight: 900; line-height: 1.15; color: var(--fg);
+  background: var(--panel); border: 3px solid var(--fg); border-radius: 0; padding: 4px 8px; text-align: center;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
+}
+.ctl-sub { font-weight: 700; color: var(--muted); }
+.ctl.guard[aria-pressed="true"] { background: #1f5a36; border-width: 6px; padding: 1px 5px; }
+.ctl.guard[aria-pressed="true"] .ctl-sub { color: #e8ffe8; }
+.ctl.punch:active { background: #5a2a2a; }
+.ctl[aria-disabled="true"] { opacity: 0.6; }
+@media (max-height: 640px) { .ctl { min-height: 64px; } }
+
+.play-panel[data-state="intro"] .rail, .play-panel[data-state="result"] .rail,
+.play-panel[data-state="intro"] .cuebar, .play-panel[data-state="result"] .cuebar { display: none; }
+.app:not([data-state="result"]) #panel-result { display: none; }
+.play-panel:not([data-state="intro"]) .intro { display: none; }
+.play-panel[data-state="intro"], .play-panel[data-state="result"] { grid-template-areas: "head" "hud" "arena" "tools" "panels"; }
+
+.panel { grid-area: panels; border: 2px solid var(--line); border-radius: 0; padding: 12px; background: var(--panel); }
+.panel h2 { margin: 0 0 6px; font-size: 1.35rem; }
+.fine { color: var(--muted); font-size: 0.9rem; margin: 6px 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.headline { font-size: 1.25rem; font-weight: 800; margin: 4px 0; }
+.result-time { font-size: 1.1rem; font-weight: 700; margin: 4px 0; }
+.payoff { margin: 8px 0; text-align: center; }
+.payoff-art { display: block; margin: 0 auto; image-rendering: crisp-edges; image-rendering: pixelated; width: 128px; height: 72px; max-width: 100%; }
+.payoff[hidden] { display: none; }
+.stamp-line { margin: 4px 0; font-weight: 900; font-size: 1.15rem; }
+.payoff-time { color: var(--accent); }
+.punchline { margin: 4px 0; font-weight: 800; }
+.linkbtn { display: inline-flex; align-items: center; text-decoration: none; color: var(--fg); }
+
+/* ---- news + embed (below the play panel; never resizes it) ---- */
+.news { margin-top: 24px; border-top: 2px solid var(--line); padding-top: 8px; max-width: 46rem; }
+.news h2 { margin: 6px 0; }
+.source-card { margin-top: 16px; border: 2px solid var(--line); padding: 12px; background: var(--panel); max-width: 100%; min-width: 0; }
+.source-card h3 { margin: 0 0 6px; font-size: 1.1rem; }
+.privacy { margin: 0 0 8px; }
+.embed-area { min-height: 240px; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.embed-summary { margin: 0 0 6px; }
+.embed-status { margin: 0 0 6px; font-weight: 700; }
+.embed-mount { max-width: 100%; overflow: hidden; }
+.embed-mount iframe, .embed-mount .twitter-tweet { max-width: 100% !important; }
+.embed-area[data-embed-state="loaded"] .embed-summary { display: none; }
+.embed-holder { max-width: 100%; }
+
+/* ---- dialogs (flat, opaque) ---- */
+.dialog {
+  position: fixed; inset: 0; z-index: 20; background: #05060d; display: grid; place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  overflow: auto;
+}
+.dialog[hidden] { display: none; }
+.dialog-card { width: min(100%, 30rem); max-height: 100%; overflow: auto; background: var(--panel); border: 3px solid var(--fg); border-radius: 0; padding: 16px; }
+.dialog-card h2 { margin: 0 0 8px; }
+.dialog-card h2:focus-visible { outline-offset: 4px; }
+.dialog textarea { width: 100%; font: inherit; color: #000; background: #fff; padding: 8px; margin-bottom: 10px; }
+
+/* ---- tablets / desktop: >= 600 stacked and generous; >= 900 centered full-width ring ---- */
+@media (min-width: 600px) { .arena { --arena-h: clamp(240px, 40svh, 400px); } .d-full { display: inline; } .d-short { display: none; } }
+@media (min-width: 900px) {
+  .play-panel { max-width: 1120px; margin-left: auto; margin-right: auto; grid-template-areas: "head" "hud" "arena" "cue" "rail" "panels"; }
+  .play-panel[data-state="intro"], .play-panel[data-state="result"] { grid-template-areas: "head" "hud" "arena" "panels"; }
+  .panel-tools { grid-area: head; justify-self: end; margin-top: 0; gap: 8px; }
+  .arena { --arena-h: clamp(320px, 52svh, 500px); }
+  .controls { gap: 12px; }
+  /* desktop (>=900px) keeps its r6 utility look and placement: a text Pause button in the heading row */
+  .pause-btn { width: auto; min-width: 64px; padding: 0.3rem 0.7rem; border: 2px solid var(--line); background: var(--panel); font-weight: 700; font-size: 1rem; }
+  .pause-btn:disabled { opacity: 0.55; }
+  .pause-badge { display: none; }
+  .pause-label { display: inline; }
+}
+
+/* ---- short landscape >= 900 wide: r6 composition unchanged (utilities in the heading row) ---- */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 900px) {
+  .play-panel {
+    grid-template-columns: minmax(0, 1fr) 120px;
+    grid-template-areas: "head head" "hud rail" "arena rail" "cue rail" "panels panels";
+  }
+  .play-panel[data-state="intro"], .play-panel[data-state="result"] { grid-template-areas: "head head" "hud hud" "arena arena" "panels panels"; }
+  .panel-tools { grid-area: head; justify-self: end; }
+  .arena { --arena-h: clamp(200px, calc(100svh - 164px), 340px); }
+  .rail { min-height: 0; }
+  .controls { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; flex: 1 1 auto; }
+  .ctl { min-height: 64px; }
+}
+
+/* ---- r7 short landscape < 900 wide (e.g. 667x375): arena left, Guard over Punch in a right rail with NO utilities;
+   a lower-left band under the arena holds Pause/Restart and the cue strip, far from the rail ---- */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 899px) {
+  .play-panel {
+    grid-template-columns: auto minmax(0, 1fr) 120px; column-gap: 12px;
+    grid-template-areas: "head head head" "hud hud rail" "arena arena rail" "tools cue rail" "panels panels panels";
+  }
+  .play-panel[data-state="intro"], .play-panel[data-state="result"] { grid-template-areas: "head head head" "hud hud hud" "arena arena arena" "tools tools tools" "panels panels panels"; }
+  .panel-tools { margin-top: 0; align-self: center; }
+  .arena { --arena-h: clamp(200px, calc(100svh - 152px - env(safe-area-inset-bottom)), 340px); }
+  .rail { min-height: 0; }
+  .controls { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; flex: 1 1 auto; }
+  .ctl { min-height: 64px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .bar-fill { transition: none; } }
+@media (max-width: 360px) { .hud-name { font-size: 0.875rem; } }

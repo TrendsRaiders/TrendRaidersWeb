@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  {{csp}}
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  {{robots}}
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/site.css">
+  <link rel="stylesheet" href="/games/2026-10-17/game.css">
+  <script type="application/json" id="site-config">{{config}}</script>
+  <script type="module" src="/games/2026-10-17/js/main.js"></script>
+</head>
+<body>
+<div id="page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  {{banner}}
+  {{nav}}
+  <main id="main">
+    {{gamenav}}
+
+    <section id="game" class="play-panel" aria-labelledby="game-title">
+      <noscript><p class="notice">30-Second KO needs JavaScript. The news recap below is readable without it.</p></noscript>
+      <div class="panel-head">
+        <h1 id="game-title" class="panel-title">30-Second KO <span class="panel-date"><time datetime="2026-10-17"><span class="d-full">17 October 2026 (UTC)</span><span class="d-short" aria-hidden="true">17 Oct 2026 (UTC)</span></time></span></h1>
+      </div>
+      <div class="panel-tools" id="panel-tools">
+        <button type="button" id="btn-pause" class="pause-btn" disabled><span class="pause-badge" aria-hidden="true"><i></i><i></i></span><span class="pause-label" aria-hidden="true">Pause</span><span class="sr-only">Pause game</span></button>
+        <button type="button" id="btn-restart-play" class="btn small">Restart</button>
+        <button type="button" id="btn-sound" class="btn small" aria-pressed="false">Sound: off</button>
+      </div>
+
+      <div id="app" class="app" data-state="intro" data-punch-requests="0">
+        <div class="hud" id="hud">
+          <div class="hud-side">
+            <span class="hud-name">You</span>
+            <div class="hud-row"><span class="hp-num" id="hp-player"><span class="sr-only">health </span>100</span>
+            <div class="bar" aria-hidden="true"><div class="bar-fill player" id="bar-player"></div></div></div>
+          </div>
+          <div class="hud-time"><span class="sr-only">Time left </span><span id="time-left">30</span><span aria-hidden="true">s</span></div>
+          <div class="hud-side right">
+            <span class="hud-name">Jack (parody)</span>
+            <div class="hud-row"><span class="hp-num" id="hp-enemy"><span class="sr-only">health </span>100</span>
+            <div class="bar" aria-hidden="true"><div class="bar-fill enemy" id="bar-enemy"></div></div></div>
+          </div>
+        </div>
+
+        <div id="play-region" class="play-region" role="group" aria-label="Play controls: arena, Punch and Guard">
+          <div id="arena" class="arena" tabindex="0" role="group"
+               aria-label="Boxing arena. Space or J to punch, K or Shift to guard, Escape to pause.">
+            <div id="stage" class="stage">
+              <canvas id="art" role="img" aria-label="Pixel-art ring: you on the left, Jack on the right" data-player-pose="idle" data-enemy-pose="idle" data-guard="off"></canvas>
+              <div id="art-fallback" class="art-fallback" hidden aria-hidden="true">
+                <span class="fb-fig fb-player" id="fb-player">YOU</span><span class="fb-fig fb-enemy" id="fb-enemy">JACK</span>
+              </div>
+            </div>
+            <p id="placard" class="placard">30-SECOND HEADLINE CHALLENGE</p>
+            <div id="countdown" class="countdown" hidden aria-hidden="true"></div>
+            <section id="panel-intro" class="intro" aria-labelledby="intro-heading" aria-describedby="intro-goal intro-keys intro-touch">
+              <h2 id="intro-heading" class="intro-heading">Ready?</h2>
+              <p id="intro-goal" class="intro-goal">Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
+              <p id="intro-keys" class="intro-keys"><strong>PUNCH:</strong> Space / J · <strong>GUARD:</strong> hold K / Shift · Esc: Pause</p>
+              <p id="intro-touch" class="intro-touch"><strong>PUNCH:</strong> tap · <strong>GUARD:</strong> hold</p>
+              <button type="button" id="btn-start" class="btn primary start" aria-describedby="intro-goal intro-keys intro-touch">Start round</button>
+            </section>
+          </div>
+
+          <div id="cuebar" class="cuebar">
+            <div id="cue" class="cue" aria-hidden="true"></div>
+            <div class="cue-status">
+              <div id="windup-wrap" class="windup-wrap" hidden aria-hidden="true">
+                <span class="windup-label">WIND-UP</span><div class="windup-bar"><div id="windup-fill"></div></div>
+              </div>
+              <div id="counter-badge" class="counter-badge" hidden aria-hidden="true">COUNTER NOW!</div>
+            </div>
+          </div>
+
+          <div class="rail">
+            <div id="controls" class="controls">
+              <button type="button" id="btn-guard" class="ctl guard" aria-pressed="false">GUARD <span class="ctl-sub">— hold</span></button>
+              <button type="button" id="btn-punch" class="ctl punch">PUNCH <span class="ctl-sub">— tap</span></button>
+            </div>
+          </div>
+        </div>
+
+        <section id="panel-result" class="panel" aria-labelledby="result-heading">
+          <h2 id="result-heading" tabindex="-1">Result</h2>
+          <p id="result-headline" class="headline"></p>
+          <div id="payoff" class="payoff" hidden>
+            <canvas id="payoff-art" class="payoff-art" width="128" height="72" role="img" aria-label="Pixel-art stool with Jack's gloves resting on it beside a big stopwatch stamped BEAT THE BUZZER."></canvas>
+            <p class="stamp-line"><span class="stamp-text">BEAT THE BUZZER</span> <span id="payoff-time" class="payoff-time"></span></p>
+            <p class="punchline">Headline speedrun complete. The timeline can wait.</p>
+            <button type="button" id="btn-skip-anim" class="btn small">Skip animation</button>
+          </div>
+          <p id="result-time" class="result-time"></p>
+          <p id="result-health" class="fine"></p>
+          <p id="result-best" class="fine" hidden></p>
+          <div class="row">
+            <button type="button" id="btn-retry" class="btn primary">Retry</button>
+            <button type="button" id="btn-share" class="btn"></button>
+          </div>
+          <p id="share-note" class="fine"></p>
+        </section>
+      </div>
+      <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="news" class="news" aria-labelledby="news-heading">
+      <h2 id="news-heading">News behind the game</h2>
+      <p class="news-date"><strong>News/source date: 17 October 2026 (UTC)</strong></p>
+      <p class="news-body">FearedBuck reported on 17 October 2026 that Jack Doherty knocked out one of the Island Boys within the first 30 seconds at Brand Risk 16. That report inspired this game's 30-second first-to-KO challenge, but the cartoon duel, guard/counter rules and outcomes are fictional—not a reconstruction of the bout. The result has not been independently verified by this studio, and this unofficial parody implies no affiliation or endorsement.</p>
+      <p>Source: <a href="https://twitter.com/FearedBuck/status/2111278238253342868" rel="noopener noreferrer">FearedBuck reporting, 17 October 2026</a> (posted <time datetime="2026-10-17T02:08:52Z">2026-10-17 02:08:52 UTC</time>).</p>
+
+      <section id="source-post" class="source-card" aria-labelledby="source-post-heading">
+        <h3 id="source-post-heading">Source post — FearedBuck</h3>
+        <p class="privacy">This embedded post connects to X automatically. X may use cookies or other identifiers and download media.</p>
+        <div id="embed-area" class="embed-area" data-embed-state="idle">
+          <p id="embed-summary" class="embed-summary">Source summary: FearedBuck reported a Jack Doherty knockout within the first 30 seconds at Brand Risk 16. Posted 17 October 2026, 02:08:52 UTC. This summary is not the embedded post.</p>
+          <p id="embed-status" class="embed-status" role="status"></p>
+          <div id="embed-mount" class="embed-mount"></div>
+        </div>
+        <div class="row">
+          <button type="button" id="btn-retry-embed" class="btn" hidden>Try loading again</button>
+          <a id="link-open-x" class="btn linkbtn" href="https://twitter.com/FearedBuck/status/2111278238253342868" rel="noopener noreferrer">Open source post on X</a>
+        </div>
+      </section>
+    </section>
+  </main>
+  <footer class="site-footer"><button type="button" id="btn-about" class="btn">About</button></footer>
+</div>
+
+<div id="dlg-pause" class="dialog" role="dialog" aria-modal="true" aria-labelledby="pause-heading" hidden>
+  <div class="dialog-card">
+    <h2 id="pause-heading" tabindex="-1" data-modal-heading>Paused</h2>
+    <p>The fight is frozen. Resume starts a 3-2-1 lead-in; you must press Guard and Punch fresh.</p>
+    <div class="row">
+      <button type="button" id="btn-resume" class="btn primary">Resume</button>
+      <button type="button" id="btn-restart" class="btn">Restart</button>
+      <button type="button" id="btn-exit" class="btn">Exit</button>
+    </div>
+  </div>
+</div>
+
+<div id="dlg-about" class="dialog" role="dialog" aria-modal="true" aria-labelledby="about-heading" hidden>
+  <div class="dialog-card">
+    <h2 id="about-heading" tabindex="-1" data-modal-heading>About 30-Second KO</h2>
+    <p>The headline lasted 30 seconds. Your rematch gets 30.</p>
+    <p>Block the hit. Punch on COUNTER. KO Jack before time runs out.</p>
+    <ul>
+      <li>When Jack raises a glove (WIND-UP), hold Guard. After BLOCK, the COUNTER window opens: tap Punch.</li>
+      <li>Punching early drops your guard for half a second, and an unguarded hit stuns you.</li>
+      <li>Keyboard: Space or J punches; K or Shift holds Guard; Escape pauses.</li>
+      <li>Touch: tap Punch, hold Guard. Both can be used at once.</li>
+    </ul>
+    <p>Unofficial creator-boxing parody. Original fictionalized characters; not affiliated with or endorsed by any person or event. News is inspiration, not a reconstruction of independently verified results.</p>
+    <button type="button" id="btn-about-close" class="btn primary">Close</button>
+  </div>
+</div>
+
+<div id="dlg-share" class="dialog" role="dialog" aria-modal="true" aria-labelledby="share-heading" hidden>
+  <div class="dialog-card">
+    <h2 id="share-heading" tabindex="-1" data-modal-heading>Copy your result</h2>
+    <p>Automatic copy was not available. Select the text below and copy it yourself.</p>
+    <textarea id="share-text" readonly rows="4" aria-label="Result text to copy"></textarea>
+    <button type="button" id="btn-share-close" class="btn primary">Close</button>
+  </div>
+</div>
+</body>
+</html>
