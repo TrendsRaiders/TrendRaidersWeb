@@ -107,6 +107,48 @@ for (const [name, t] of Object.entries(THEMES)) {
   }
 }
 
+// ---- Bigfoot: Take Two (2026-10-19): UI text pairs from game.css and stage/sprite pairs read from art.js ----
+import { PALETTE as BF, MONSTER } from '../games/2026-10-19/js/art.js';
+const BF_SKY = [BF.skyTop, BF.skyMid, BF.skyLow];
+PAIRS.push(
+  ['bigfoot: cue text on its box', '#ffffff', '#14141f', 4.5],
+  ['bigfoot: usable cue text', '#ffffff', '#0f4d24', 4.5],
+  ['bigfoot: miss cue text', '#ffffff', '#7a1428', 4.5],
+  ['bigfoot: cue border vs sky', '#14141f', BF.skyMid, 3],
+  ['bigfoot: POSE label', '#1a1400', accent, 4.5],
+  ['bigfoot: POSE border vs page', '#ffffff', bg, 3],
+  ['bigfoot: POSE aria-disabled label', '#ffffff', '#7a5a2a', 4.5],
+  ['bigfoot: POSE disabled label on panel', muted, panel, 4.5],
+  ['bigfoot: HUD text on page', fg, bg, 4.5],
+  ['bigfoot: utility label on panel', fg, panel, 4.5],
+  ['bigfoot: pressed utility label', fg, '#2a3566', 4.5],
+  ['bigfoot: overlay text on panel', fg, panel, 4.5],
+  ['bigfoot: overlay panel vs sky', panel, BF.skyMid, 3],
+  ['bigfoot: overlay border vs floor', fg, BF.floor, 3],
+  ['bigfoot: room note on panel', '#ffe14a', panel, 4.5],
+  ['bigfoot: contact label on frame', '#14141f', '#ffffff', 4.5],
+  ['bigfoot: unused contact label on frame', '#4b5560', '#ffffff', 4.5],
+  ['bigfoot: provenance text on page', muted, bg, 4.5],
+  ['bigfoot: share textarea', '#000000', '#ffffff', 4.5],
+  ['bigfoot: focus ring vs sky', focus, bg, 3],
+  // stage: the tape and marker must separate from the floor they lie on, and from each other
+  ['bigfoot: tape yellow vs floor', BF.tape, BF.floor, 3],
+  ['bigfoot: centre tape (black) vs tape yellow', BF.black, BF.tape, 3],
+  ['bigfoot: bracket posts (white) vs floor', BF.white, BF.floor, 3],
+  ['bigfoot: bracket outline (black) vs tape yellow', BF.black, BF.tape, 3],
+  ['bigfoot: footpoint outline (white) vs floor', BF.white, BF.floor, 3],
+  ['bigfoot: footpoint magenta vs its white ring', BF.marker, BF.white, 3],
+  ['bigfoot: photo badge check ring (white) on green', '#ffffff', '#1c8c3c', 3],
+  ['bigfoot: photo badge cross (white) on red', '#ffffff', '#c2283c', 3],
+  ['bigfoot: sign text on cardboard', BF.black, BF.card, 4.5],
+);
+// the creature must stand out from every backdrop colour it walks in front of: its outline or its body reaches 3:1
+for (const [name, col] of [['top sky', BF.skyTop], ['mid sky', BF.skyMid], ['low sky', BF.skyLow], ['floor line', BF.black]]) {
+  const outline = MONSTER.stand.colors.k; const body = MONSTER.stand.colors.T;
+  PAIRS.push([`bigfoot creature vs ${name} (outline or body)`, ratio(outline, col) >= ratio(body, col) ? outline : body, col, 3]);
+}
+for (const col of BF_SKY) PAIRS.push(['bigfoot: cardboard tree outline vs sky', BF.outline, col, 3]);
+
 export function run() {
   return PAIRS.map(([name, a, b, min]) => ({ name, fg: a, bg: b, min, ratio: ratio(a, b), pass: ratio(a, b) >= min }));
 }
