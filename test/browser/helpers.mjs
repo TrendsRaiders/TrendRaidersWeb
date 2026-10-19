@@ -84,7 +84,7 @@ export async function mockProvider(context, initial = 'success') {
 }
 
 /** New page on a fake clock; collects console errors and failed requests. provider: mock mode, or 'real' for no interception. */
-export async function openGame(env, { viewport = { width: 390, height: 800 }, route = GAME, reducedMotion = 'no-preference', touch = false, init, provider = 'success' } = {}) {
+export async function openGame(env, { viewport = { width: 390, height: 800 }, route = GAME, reducedMotion = 'no-preference', touch = false, init, provider = 'success', freeze = false } = {}) {
   const context = await env.browser.newContext({ viewport, reducedMotion: /** @type {any} */ (reducedMotion), hasTouch: touch });
   const page = await context.newPage();
   const problems = [];
@@ -93,8 +93,11 @@ export async function openGame(env, { viewport = { width: 390, height: 800 }, ro
   page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()}`));
   const providerCtl = provider === 'real' ? null : await mockProvider(context, provider);
   if (init) await page.addInitScript(init);
-  await page.clock.install();
+  // freeze: install at a fixed fake time and PAUSE it, so every later tick is an explicit runFor(): no wall-time races.
+  if (freeze) await page.clock.install({ time: 0 });
+  else await page.clock.install();
   await page.goto(env.host.origin + route);
+  if (freeze) await page.clock.pauseAt(1000);
   return { page, context, problems, provider: providerCtl };
 }
 

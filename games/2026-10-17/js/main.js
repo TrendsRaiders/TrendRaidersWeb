@@ -228,7 +228,14 @@ function bindControls() {
   });
   const release = (e) => { lastActivation = performance.now(); if (guardPointers.delete(e.pointerId)) syncGuard(); };
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) guardBtn.addEventListener(type, release);
-  punchBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); lastActivation = performance.now(); requestPunch(); });
+  // Punch also captures its pointer, so a press that starts on Punch and is dragged/released over a utility button
+  // (e.g. Pause) ends on Punch and can never activate the utility.
+  punchBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    lastActivation = performance.now();
+    try { punchBtn.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
+    requestPunch();
+  });
   // Screen-reader style activation (click without a pointer/keyboard handler having fired).
   for (const btn of [guardBtn, punchBtn]) {
     btn.addEventListener('click', (e) => {
@@ -530,6 +537,16 @@ function init() {
   $('btn-retry').addEventListener('click', () => resetToIntro());
   $('btn-restart-play').addEventListener('click', () => resetToIntro());
   $('btn-pause').addEventListener('click', () => pauseGame());
+  // While a round is on, a mouse/touch press inside the play panel must not move focus away from the play region:
+  // otherwise tapping the blank gaps (or pressing Pause/Restart) would trip the focus-leaves-play auto-pause on the
+  // PRESS. Pause then activates only through its native click (press and release on the button), once. Links, form
+  // fields and everything outside the panel keep normal focus behavior (and the normal pause rule).
+  $('game').addEventListener('mousedown', (e) => {
+    if (state !== 'playing' && state !== 'countdown') return;
+    const t = /** @type {Element} */ (e.target);
+    if (t.closest && t.closest('a[href], input, select, textarea, [contenteditable]')) return;
+    e.preventDefault();
+  });
   $('btn-resume').addEventListener('click', resume);
   $('btn-restart').addEventListener('click', restart);
   $('btn-exit').addEventListener('click', exitToLanding);

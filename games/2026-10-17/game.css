@@ -12,8 +12,15 @@
 }
 .app, .play-region { display: contents; }
 .panel-head { grid-area: head; display: flex; align-items: center; min-height: 28px; }
-.panel-tools { grid-area: tools; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.panel-tools { grid-area: tools; display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start; align-items: center; margin-top: 8px; }
 .panel-tools .btn { min-height: 44px; min-width: 64px; padding: 0.3rem 0.7rem; font-size: 1rem; }
+/* r7: below 900px Pause is one real >=44x44 button whose visible treatment is only a 24x24 outlined pause-bars badge
+   (neutral, unfilled). The padding is inside the button itself: no pseudo-element or wrapper hit area. */
+.pause-btn { position: relative; display: grid; place-items: center; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+.pause-btn:disabled { cursor: not-allowed; }
+.pause-badge { display: flex; align-items: center; justify-content: center; gap: 4px; width: 24px; height: 24px; border: 2px solid var(--fg); background: transparent; }
+.pause-badge i { display: block; width: 4px; height: 12px; background: var(--fg); }
+.pause-label { display: none; }
 /* tools by state: Sound while stopped; Pause + Restart while a round is on */
 .play-panel[data-state="playing"] #btn-sound, .play-panel[data-state="countdown"] #btn-sound, .play-panel[data-state="paused"] #btn-sound { display: none; }
 .play-panel[data-state="intro"] #btn-pause, .play-panel[data-state="result"] #btn-pause,
@@ -145,13 +152,18 @@
 @media (min-width: 900px) {
   .play-panel { max-width: 1120px; margin-left: auto; margin-right: auto; grid-template-areas: "head" "hud" "arena" "cue" "rail" "panels"; }
   .play-panel[data-state="intro"], .play-panel[data-state="result"] { grid-template-areas: "head" "hud" "arena" "panels"; }
-  .panel-tools { grid-area: head; justify-self: end; }
+  .panel-tools { grid-area: head; justify-self: end; margin-top: 0; gap: 8px; }
   .arena { --arena-h: clamp(320px, 52svh, 500px); }
   .controls { gap: 12px; }
+  /* desktop (>=900px) keeps its r6 utility look and placement: a text Pause button in the heading row */
+  .pause-btn { width: auto; min-width: 64px; padding: 0.3rem 0.7rem; border: 2px solid var(--line); background: var(--panel); font-weight: 700; font-size: 1rem; }
+  .pause-btn:disabled { opacity: 0.55; }
+  .pause-badge { display: none; }
+  .pause-label { display: inline; }
 }
 
-/* ---- short landscape (e.g. 667x375): HUD above, arena + cue left, thumb rail right, no instruction ---- */
-@media (orientation: landscape) and (max-height: 500px) {
+/* ---- short landscape >= 900 wide: r6 composition unchanged (utilities in the heading row) ---- */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 900px) {
   .play-panel {
     grid-template-columns: minmax(0, 1fr) 120px;
     grid-template-areas: "head head" "hud rail" "arena rail" "cue rail" "panels panels";
@@ -159,6 +171,21 @@
   .play-panel[data-state="intro"], .play-panel[data-state="result"] { grid-template-areas: "head head" "hud hud" "arena arena" "panels panels"; }
   .panel-tools { grid-area: head; justify-self: end; }
   .arena { --arena-h: clamp(200px, calc(100svh - 164px), 340px); }
+  .rail { min-height: 0; }
+  .controls { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; flex: 1 1 auto; }
+  .ctl { min-height: 64px; }
+}
+
+/* ---- r7 short landscape < 900 wide (e.g. 667x375): arena left, Guard over Punch in a right rail with NO utilities;
+   a lower-left band under the arena holds Pause/Restart and the cue strip, far from the rail ---- */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 899px) {
+  .play-panel {
+    grid-template-columns: auto minmax(0, 1fr) 120px; column-gap: 12px;
+    grid-template-areas: "head head head" "hud hud rail" "arena arena rail" "tools cue rail" "panels panels panels";
+  }
+  .play-panel[data-state="intro"], .play-panel[data-state="result"] { grid-template-areas: "head head head" "hud hud hud" "arena arena arena" "tools tools tools" "panels panels panels"; }
+  .panel-tools { margin-top: 0; align-self: center; }
+  .arena { --arena-h: clamp(200px, calc(100svh - 152px - env(safe-area-inset-bottom)), 340px); }
   .rail { min-height: 0; }
   .controls { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; flex: 1 1 auto; }
   .ctl { min-height: 64px; }

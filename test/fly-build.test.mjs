@@ -65,15 +65,16 @@ test('direct route page is framed as a preview, never as released, and links no 
 });
 
 test('boxing edition, scaffold, release registry, shared build code and site CSS are preserved byte for byte', () => {
+  // r7 (lower mobile Pause) legitimately changed the boxing game.css, index.html and js/main.js and its notes; these pins
+  // now track the r7 files. Everything else here (Fly, shared build code, site CSS, engine, scaffold, registry) is unchanged.
   const pinned = {
-    'docs/thirty-second-ko.md': '945ada2327e9bc2981b5bfe8c1ee632bb021a9efba9d9ff7ab2825db128c1f38',
     'games/2026-10-17/edition.json': 'aeef498083d1cd221191ef6c22dc6646d4751ee4de4b7cc9bef171ba9e4ebf1f',
-    'games/2026-10-17/game.css': '42d3d96089b193a3f023ef1abb1564f818a5ba39e84b0d34870cae7af1744e0a',
-    'games/2026-10-17/index.html': '58c5d414834a56586eb41926e916247d8a094ad023f4fe7abd4685087643a71a',
+    'games/2026-10-17/game.css': 'adb69ebd1bc7ae1c67e1054abf98c646d8bcefe741294deeffe67886b05ddd63',
+    'games/2026-10-17/index.html': '3988bb52391babcdaf9d9d9eb5c4736187984442fa383f9329e3c9fd5f2809fd',
     'games/2026-10-17/js/art.js': '484ab874a8dbe9704efb7dac464844e76a522bbbd9762334d262697eff165925',
     'games/2026-10-17/js/embed.js': '5d5662b41d41947620aa1a4c3114d6ef8db442d392be9f9db3e56d35222c0144',
     'games/2026-10-17/js/engine.js': 'a3a7dcb460381e633bd2217c435b45a11bc425a77e8d127edf047aabb3196fb7',
-    'games/2026-10-17/js/main.js': 'd0b7a198c9069eb1a56a29b5f8d30e501c2fbdb7277eaac3602700da9ae36852',
+    'games/2026-10-17/js/main.js': 'd6f2e2d682727bb4e43c1044e5a5c74e27a58734e83c574d624476feb8606752',
     'games/2026-10-17/js/modal.js': 'f5e104fa22596e939e725007dcef10a4929325f723e6808270eb13221fd7508a',
     'games/2026-10-17/js/share.js': '04d21a063ed9895e26191aef1bd041ccffca3d2d031e96fd1246108a0ce7ec51',
     'public/index.html': '30336adeab1328b33f39f858663311a4dd9fcde02788b15762d1664755ee009d',

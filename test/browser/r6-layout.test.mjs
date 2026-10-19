@@ -44,7 +44,7 @@ for (const sz of SIZES) {
     assert.ok(m.sw <= m.vw, 'no horizontal overflow');
     assert.equal(m.active, 'btn-start');
     assert.deepEqual([m.rail, m.cue, m.pause], ['none', 'none', 'none'], 'no combat or tutorial-adjacent controls while stopped');
-    const base = { '320x568': 227.2, '390x844': 337.6, '667x375': 211, '1280x720': 374.4 }[sz.name.split(' ')[0]];
+    const base = { '320x568': 227.2, '390x844': 337.6, '667x375': 223, '1280x720': 374.4 }[sz.name.split(' ')[0]];
     assert.ok(Math.abs(m.arena.h - base) <= 1, `arena keeps its normal height in Intro (${m.arena.h} vs ${base}): the overlay fits without growing it`);
     if (sz.mode === 'desktop') assert.ok(m.header.h <= 72, `header ${m.header.h}px <= 72`);
     await page.clock.runFor(40000); // wait far longer than a round
@@ -97,9 +97,9 @@ for (const sz of SIZES) {
       assert.ok(m.r.arena.h >= 200, `arena ${m.r.arena.h}`);
       assert.ok(m.r.guard.w >= 104 && m.r.guard.w <= 128 && Math.abs(m.r.guard.x - m.r.punch.x) < 1, `right thumb rail width ${m.r.guard.w}`);
       assert.ok(m.r.guard.x >= m.r.arena.right, 'rail to the right of the arena');
-      assert.ok(m.r.cue.right <= m.r.guard.x && m.r.cue.x === m.r.arena.x, 'cue strip adjacent under the arena, not behind the rail');
+      assert.ok(m.r.cue.right <= m.r.guard.x && Math.abs(m.r.cue.y - m.r.arena.bottom) < 12, 'cue strip in the lower band under the arena, not behind the rail (r7: beside the utilities)');
       assert.ok(m.r.arena.w >= m.vw - 12 - 8 - 12 - 128 - 1, 'arena takes the remaining width');
-      assert.ok(m.r.hud.bottom <= m.r.arena.y && m.r.pause.bottom <= m.r.hud.y + 1, 'compact Pause/Restart row above the HUD');
+      assert.ok(m.r.hud.bottom <= m.r.arena.y && m.r.pause.y >= m.r.arena.bottom && m.r.restart.y >= m.r.arena.bottom, 'r7: Pause/Restart moved from above the HUD to the lower-left band under the arena');
       assert.ok(m.r.arena.h >= r5.arenaH, `arena at least as tall as r5 (${r5.arenaH} -> ${m.r.arena.h})`);
     }
     if (sz.mode === 'desktop') {
