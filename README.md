@@ -1,6 +1,6 @@
 # Trend Raiders Web
 
-Static site, vanilla HTML/CSS/ES modules, no framework, no runtime dependencies, no remote assets, no backend. The public root is still the honest "Hello, world!" scaffold: **no game edition is released**.
+Static site, vanilla HTML/CSS/ES modules, no framework, no runtime dependencies, no remote assets, no backend. The *live* site is still the "Hello, world!" scaffold. This branch stages a **public-mode release candidate** (30-Second KO + Fly the Simulation, see [docs/public-release-candidate.md](docs/public-release-candidate.md)); it is not live and nothing in the repository says a release happened.
 
 The repository also contains the *candidate* edition **30-Second KO** (`games/2026-10-17/`, spec r3). Its source and art live here, but it is published only by the explicit preview build, never by the normal build.
 
@@ -17,11 +17,11 @@ npm install
 ## Build commands
 
 ```sh
-npm run build           # public build -> dist/ (verified release registry only)
+npm run build           # public build -> dist/ (registry editions only: the two PENDING candidates, root = latest, dated production share URLs)
 npm run build:preview   # explicit preview build -> dist/ (candidate labeled "Preview — not released")
 ```
 
-- **Public build** publishes the scaffold root plus an edition route and navigation entry for every entry in `releases/registry.json`. That registry is empty, so the output is the scaffold, `404.html` ("No game editions are released yet"), `assets/site.css` and `build-manifest.json`. Hosting environment variables (such as Netlify's `URL`) are never read, so a scaffold domain cannot cause a release or a share link.
+- **Public build** publishes the scaffold files plus a route, navigation entry and dated production share URL for every entry in `releases/registry.json`. The registry now holds the two edition candidates (`verified:false`, `status:"candidate-pending-approval"`), so the output is root = the latest edition (Fly), `/games/2026-10-17/` and `/games/2026-10-18/`, `404.html`, `assets/site.css`, `_headers` and `build-manifest.json`; with an empty registry the output is just the scaffold. Hosting environment variables (such as Netlify's `URL`) are never read.
 - **Preview build** also adds the candidates in `preview/registry.json`: route `/games/2026-10-17/`, nav entry "17 Oct 2026 — Preview (not released)", a conspicuous banner, `noindex`, and root opening the candidate under that banner. Share text stays link-free in preview.
 - Both builds write `dist/build-manifest.json`: per-file SHA-256, a tree hash and the mode/root/edition lists, plus a `source` block with the full local `git rev-parse HEAD` and a dirty flag (from `git status`, never from hosting env). A dirty or git-less build says `UNCOMMITTED` and `exactShaArtifact: false` and must not be presented as an exact-SHA artifact. `source` is outside `treeSha256`, which hashes output files only, so the tree hash stays reproducible for the same code.
 - `dist/404.html` is the honest not-found page (lists only available editions). Routes are real static `…/index.html` directories, so direct loads, refresh and back/forward need no client-side router.
@@ -34,7 +34,7 @@ An edition becomes public only by adding an entry to `releases/registry.json`:
 { "date": "2026-10-17", "verified": true, "sha": "<verified build sha>", "origin": "https://<production origin>", "verification": "<authorization/verification reference>" }
 ```
 
-Every field is validated; an incomplete entry or one without source in `games/<date>/` fails the build. Do not add an entry until a release is verified and authorized. The entry's `origin` is the only source of the share link (`origin + /games/<date>/`). Root then opens the latest released edition.
+A pending candidate (staged for an authorized draft, NOT a release) has the form `{ "date": "2026-10-17", "verified": false, "status": "candidate-pending-approval", "sourceSha": "<40-hex commit of its game files>", "origin": "https://<production origin>", "approval": "pending: …" }`; release timestamps are rejected (an edition date is not a release date) and the preview build ignores candidates. Every field is validated; an incomplete entry or one without source in `games/<date>/` fails the build. Do not add an entry until a release is verified and authorized. The entry's `origin` is the only source of the share link (`origin + /games/<date>/`). Root then opens the latest released edition.
 
 ## Checks and tests
 
@@ -62,7 +62,7 @@ Details, coverage and limitations: [docs/thirty-second-ko.md](docs/thirty-second
 | `games/2026-10-17/js/engine.js` | Deterministic combat simulation (no DOM) |
 | `games/2026-10-18/js/engine.js` | Deterministic seven-seam course and collision rules (no DOM) |
 | `games/2026-10-18/js/{art,render,main,embed,share}.js` | Fly pixel sprites, canvas painter, controller, automatic embed (8 s), plain-text copy |
-| `releases/registry.json` | Verified released editions (empty) |
+| `releases/registry.json` | Public-build editions: two pending release candidates (see docs/public-release-candidate.md) |
 | `preview/registry.json` | Preview-only candidates |
 | `scripts/` | Build CLI and library; Fly verifier, evidence capture and scripted player in `scripts/lib/` |
 | `test/` | Node tests; `test/browser/` Chromium tests |

@@ -1,19 +1,36 @@
-// Hosted-preview verifier for the boxing edition (r7: two-candidate preview, lower mobile Pause). Run against a draft after `npm run build:preview` of the SAME clean commit:
-//   node scripts/verify-hosted.mjs --url <draft origin> --sha <full 40-char commit> [--out evidence.json]
+// Hosted-draft verifier for the boxing edition (r7 lower mobile Pause; two editions in one artifact). Run it against a draft
+// of the SAME clean commit, after building that commit in the matching mode (`npm run build:preview` for --mode preview,
+// `npm run build` for --mode public):
+//   node scripts/verify-hosted.mjs --url <draft origin> --sha <full 40-char commit> --base <40-hex boxing baseline, e.g.
+//        b7321bab07dc8fd21df0207d747dbdfa4d8e5acf> [--mode preview|public] [--out evidence.json outside the repo]
+// --base is REQUIRED (no default). --mode defaults to preview. In public mode both editions are pending candidates (staged,
+// not approved or live): Fly (18 Oct) is the boxing page's Next destination and the root; share links are the dated
+// production URLs. In preview mode Fly is only an "Other dates" preview link and both arrows are disabled.
 // Compares hosted bytes with local dist/, checks effective headers, navigation, real-clock gameplay and the active
 // phone/landscape/desktop geometry. Scripted automation only: not human play evidence. It never asserts that the X
 // post rendered (that belongs to `npm run check:embed-real -- --url <origin>`); it only records the embed state.
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { build } from './lib/build-lib.mjs';
+import { createBot, playReal, readSim } from './lib/fly-bot.mjs';
 import { chromium } from 'playwright-core';
 import { ROOT } from './lib/build-lib.mjs';
 
 const arg = (n) => { const i = process.argv.indexOf(`--${n}`); return i > 0 ? process.argv[i + 1] : undefined; };
 const DRAFT = (arg('url') || '').replace(/\/$/, '');
 const SHA = arg('sha') || '';
-if (!/^(https:\/\/|http:\/\/127\.0\.0\.1)/.test(DRAFT) || !/^[0-9a-f]{40}$/.test(SHA)) { console.error('usage: --url https://<draft origin> --sha <40-hex commit> [--out file]'); process.exit(2); }
+const BASE = arg('base') || ''; // boxing baseline commit: its game files must be byte-identical (REQUIRED, no default)
+const MODE = arg('mode') || 'preview'; // 'preview' (default) or 'public' (two pending release candidates)
+const PUB = MODE === 'public';
+const ORIGIN = 'https://empty-site-7f987b.netlify.app';
+const FLY_BASE = 'ef20ccb392005e0aef4325d4ede356cf79d571d9';
+if (!/^(https:\/\/|http:\/\/127\.0\.0\.1)/.test(DRAFT) || !/^[0-9a-f]{40}$/.test(SHA) || !/^[0-9a-f]{40}$/.test(BASE) || !['preview', 'public'].includes(MODE)) { console.error('usage: --url https://<draft origin> --sha <40-hex commit> --base <40-hex boxing baseline, e.g. b7321bab07dc8fd21df0207d747dbdfa4d8e5acf> [--mode preview|public] [--out file]'); process.exit(2); }
 const GAME = '/games/2026-10-17/';
+const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'buffer', stdio: ['ignore', 'pipe', 'ignore'] });
 const FLY = '/games/2026-10-18/'; // the second (Fly the Simulation) preview candidate; preserved, never a boxing arrow destination
 const UNKNOWN = '/games/2026-10-19/';
 const walk = async (d, base = d) => (await Promise.all((await readdir(d)).sort().map(async (n) => ((await stat(join(d, n))).isDirectory() ? walk(join(d, n), base) : [relative(base, join(d, n)).split(sep).join('/')])))).flat();
@@ -26,12 +43,21 @@ const local = (p) => readFile(join(ROOT, 'dist', p));
 
 async function http() {
   const lm = await local('build-manifest.json'); const man = JSON.parse(lm.toString());
-  check('local dist is the expected clean preview artifact', man.mode === 'preview' && man.source?.commit === SHA && man.source?.dirty === false && man.source?.exactShaArtifact === true, JSON.stringify({ mode: man.mode, source: man.source }));
+  check(`local dist is the expected clean ${MODE} artifact`, man.mode === MODE && man.source?.commit === SHA && man.source?.dirty === false && man.source?.exactShaArtifact === true, JSON.stringify({ mode: man.mode, source: man.source }));
   const hm = await get('/build-manifest.json');
   check('hosted manifest 200 and byte-identical to local', hm.status === 200 && hm.buf.equals(lm), `status ${hm.status}`);
   const hosted = JSON.parse(hm.buf.toString());
-  check('hosted manifest: SHA, clean, exact flag, preview mode, tree hash', hosted.source?.commit === SHA && hosted.source?.dirty === false && hosted.source?.exactShaArtifact === true && hosted.mode === 'preview' && hosted.treeSha256 === man.treeSha256, JSON.stringify(hosted.source));
-  check('manifest: no released edition (public registry empty); BOTH preview candidates listed; root is the latest preview candidate', (hosted.releasedEditions || []).length === 0 && JSON.stringify(hosted.previewEditions) === JSON.stringify(['2026-10-17', '2026-10-18']) && hosted.root === 'preview-candidate', JSON.stringify([hosted.releasedEditions, hosted.previewEditions, hosted.root]));
+  check(`hosted manifest: SHA, clean, exact flag, ${MODE} mode, tree hash`, hosted.source?.commit === SHA && hosted.source?.dirty === false && hosted.source?.exactShaArtifact === true && hosted.mode === MODE && hosted.treeSha256 === man.treeSha256, JSON.stringify(hosted.source));
+  if (PUB) check('manifest (public): root is the latest edition; no preview edition; BOTH editions listed as PENDING candidates with their source SHAs, origin and no timestamps (staged artifact, not a verified release)', hosted.root === 'latest-released' && (hosted.previewEditions || []).length === 0 && JSON.stringify(hosted.releasedEditions) === JSON.stringify([{ date: '2026-10-17', status: 'candidate-pending-approval', sourceSha: BASE, origin: ORIGIN }, { date: '2026-10-18', status: 'candidate-pending-approval', sourceSha: FLY_BASE, origin: ORIGIN }]) && !/released_?at|publishedAt/i.test(JSON.stringify(hosted)), JSON.stringify([hosted.root, hosted.releasedEditions, hosted.previewEditions]));
+  else check('manifest (preview): no released edition (the preview build ignores pending candidates); BOTH preview candidates listed; root is the latest preview candidate', (hosted.releasedEditions || []).length === 0 && JSON.stringify(hosted.previewEditions) === JSON.stringify(['2026-10-17', '2026-10-18']) && hosted.root === 'preview-candidate', JSON.stringify([hosted.releasedEditions, hosted.previewEditions, hosted.root]));
+  // preserved game files: every shipped non-template file of BOTH editions is byte-identical to its baseline commit
+  const pres = [];
+  for (const [ed, base] of [['2026-10-17', BASE], ['2026-10-18', FLY_BASE]]) for (const f of hosted.files.map((x) => x.path).filter((x) => x.startsWith(`games/${ed}/`) && !x.endsWith('/index.html'))) {
+    /** @type {Buffer|null} */ let b = null; try { b = git('show', `${base}:${f}`); } catch { /* missing */ }
+    const r = await get(`/${f}`);
+    if (!b || r.status !== 200 || !r.buf.equals(b)) pres.push(`${f} vs ${base.slice(0, 7)}`);
+  }
+  check('preserved: every served boxing file equals the baseline --base and every served Fly file equals ef20ccb (game.css/js/art, byte for byte)', pres.length === 0, pres.join('; '));
   // every shipped file is listed (no silent omission) and every listed file exists locally with the same hash
   const localFiles = (await walk(join(ROOT, 'dist'))).filter((f) => f !== 'build-manifest.json');
   const listed = hosted.files.map((f) => f.path);
@@ -55,14 +81,17 @@ async function http() {
   check('root = latest preview candidate (Fly) byte-for-byte; boxing dated route equals its local HTML and is different from root', root.status === 200 && dated.status === 200 && fly.status === 200 && root.buf.equals(await local('index.html')) && root.buf.equals(await local('games/2026-10-18/index.html')) && fly.buf.equals(await local('games/2026-10-18/index.html')) && dated.buf.equals(await local('games/2026-10-17/index.html')) && !root.buf.equals(dated.buf));
   const html = dated.buf.toString();
   const bare = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
-  check('HTML: preview framing, noindex, nav label, source href, news heading', html.includes('<meta name="robots" content="noindex">') && html.includes('Preview — not released') && html.includes('aria-current="page">17 Oct 2026<span class="pv"> — Preview (not released)</span>') && html.includes('<span class="preview-badge" role="note">Preview — not released</span>') && html.includes('href="https://twitter.com/FearedBuck/status/2111278238253342868"') && html.includes('>News behind the game</h2>'));
+  const srcOk = html.includes('href="https://twitter.com/FearedBuck/status/2111278238253342868"') && html.includes('>News behind the game</h2>');
+  if (PUB) check('HTML (public): indexable, no preview framing, selected 17 Oct link, dated production share URL, news and source link', !html.includes('name="robots"') && !/preview-badge|Preview \(not released\)|Preview — not released/.test(html) && html.includes('aria-current="page">17 Oct 2026<span class="sr-only"> UTC edition</span>') && html.includes(`"shareUrl":"${ORIGIN}/games/2026-10-17/"`) && html.includes('"mode":"public"') && srcOk);
+  else check('HTML: preview framing, noindex, nav label, source href, news heading', html.includes('<meta name="robots" content="noindex">') && html.includes('Preview — not released') && html.includes('aria-current="page">17 Oct 2026<span class="pv"> — Preview (not released)</span>') && html.includes('<span class="preview-badge" role="note">Preview — not released</span>') && srcOk && html.includes('"shareUrl":null'));
   const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
   check('HTML r6: ONE compact navigation in the header; no About/tutorial/title/share in the header; About only in the footer after the news', (html.match(/<nav /g) || []).length === 1 && html.includes('<nav class="site-nav" aria-label="Game navigation">') && !/About|Block the hit|<h1|Share/.test(header) && /<footer class="site-footer"><button type="button" id="btn-about"/.test(html) && html.indexOf('id="btn-about"') > html.indexOf('id="news"') && (html.match(/id="btn-about"/g) || []).length === 1);
   check('HTML r6: Intro overlay inside the arena with the exact goal, keyboard and touch lines and Start round; no persistent instruction element', html.indexOf('id="panel-intro"') > html.indexOf('id="arena"') && html.indexOf('id="panel-intro"') < html.indexOf('id="cuebar"') && html.includes('Block the hit. Punch on COUNTER. KO Jack before time runs out.') && html.includes('<strong>PUNCH:</strong> Space / J · <strong>GUARD:</strong> hold K / Shift · Esc: Pause') && html.includes('<strong>PUNCH:</strong> tap · <strong>GUARD:</strong> hold') && html.includes('>Start round</button>') && !html.includes('instr-play') && (html.match(/Block the hit\. Punch on COUNTER/g) || []).length === 2);
-  check('HTML r6: disabled ends carry compact visible and full accessible labels', html.includes('None earlier<span class="sr-only"> — No earlier released game</span>') && html.includes('None later<span class="sr-only"> — No later released game</span>'));
+  check('HTML r6: disabled ends carry compact visible and full accessible labels (public: only the unavailable end)', html.includes('None earlier<span class="sr-only"> — No earlier released game</span>') && (PUB || html.includes('None later<span class="sr-only"> — No later released game</span>')));
   check('HTML r7: one real Pause <button> with the 24x24-badge markup and an accessible name; Restart is a text button; Pause/Restart sit in the tools row after the combat rail; old text-only HUD Pause is gone', /<button type="button" id="btn-pause" class="pause-btn" disabled><span class="pause-badge" aria-hidden="true"><i><\/i><i><\/i><\/span><span class="pause-label" aria-hidden="true">Pause<\/span><span class="sr-only">Pause game<\/span><\/button>/.test(html) && html.includes('id="btn-restart-play" class="btn small">Restart</button>') && (html.match(/id="btn-pause"/g) || []).length === 1 && !html.includes('class="btn small" disabled>Pause'));
   const chooser = (html.match(/<details class="others">[\s\S]*?<\/details>/) || [''])[0];
-  check('HTML r7: the boxing page offers the Fly preview only in the Other dates chooser (a real link), and both arrows stay disabled buttons', chooser.includes('href="/games/2026-10-18/"') && (html.match(/class="gn-link" disabled/g) || []).length === 2 && !html.includes('<a class="gn-link"'));
+  if (PUB) check('HTML (public): Next is a real link to the Fly route with its date, Previous is a disabled None earlier, and Fly is also in the Other dates chooser', html.includes('<a class="gn-link" href="/games/2026-10-18/" data-gn="next">') && html.includes('18 Oct 2026<span class="sr-only"> UTC</span>') && html.includes('None earlier<span class="sr-only"> — No earlier released game</span>') && /class="gn-link" disabled data-gn="prev"/.test(html) && chooser.includes('href="/games/2026-10-18/"'));
+  else check('HTML r7: the boxing page offers the Fly preview only in the Other dates chooser (a real link), and both arrows stay disabled buttons', chooser.includes('href="/games/2026-10-18/"') && (html.match(/class="gn-link" disabled/g) || []).length === 2 && !html.includes('<a class="gn-link"'));
   check('HTML: no provider script/iframe/hint in markup (the one automatic attempt is injected by game code)', !/<iframe|rel="(preconnect|dns-prefetch|preload)"|<script[^>]+src="https?:/i.test(bare));
   const nf = await get(UNKNOWN);
   check('unknown date is an honest HTTP 404 page, equal to local 404.html', nf.status === 404 && nf.buf.equals(await local('404.html')) && /Page not found/.test(nf.buf.toString()) && !/id="app"/.test(nf.buf.toString()));
@@ -94,7 +123,8 @@ async function active(browser, name, w, h, mode) {
   check(`${name}: Intro fits inside the arena at >=16px, Start focused, 100/30 shown, preview label, notice, summary/link, no Load button`, (await st(page)) === 'intro' && intro.inside && intro.active === 'btn-start' && intro.fonts.every((f) => f >= 16) && /100$/.test(intro.hp) && intro.time === '30' && (await tx(page, 'nav a[aria-current="page"]')).startsWith('17 Oct 2026') && (await tx(page, '.privacy')).startsWith('This embedded post connects to X automatically.') && (await page.locator('#btn-load-embed').count()) === 0 && (await page.isVisible('#link-open-x')));
   if (mode === 'desktop') check(`${name}: compact header <= 72px`, intro.header <= 72, intro.header);
   else check(`${name}: compact header <= 112px (two short rows at most)`, intro.header <= 112, intro.header);
-  check(`${name}: Previous/Next are disabled buttons with compact honest text (real empty registry)`, await page.evaluate(() => [...document.querySelectorAll('.site-nav button[data-gn]')].every((b) => /** @type {HTMLButtonElement} */ (b).disabled) && document.querySelectorAll('.site-nav a[data-gn]').length === 0));
+  if (PUB) check(`${name}: Previous is a disabled None earlier; Next is a real link to the Fly route with a >=44px target`, await page.evaluate(() => { const n = document.querySelector('.site-nav a[data-gn="next"]'); const r = n?.getBoundingClientRect(); return !!n && n.getAttribute('href') === '/games/2026-10-18/' && !!r && r.width >= 44 && r.height >= 44 && /** @type {HTMLButtonElement} */ (document.querySelector('.site-nav button[data-gn="prev"]'))?.disabled === true; }));
+  else check(`${name}: Previous/Next are disabled buttons with compact honest text (preview: the other candidate is not a released neighbor)`, await page.evaluate(() => [...document.querySelectorAll('.site-nav button[data-gn]')].every((b) => /** @type {HTMLButtonElement} */ (b).disabled) && document.querySelectorAll('.site-nav a[data-gn]').length === 0));
   await page.waitForTimeout(1500);
   check(`${name}: nothing advances behind Intro (HUD still 100/30 after 1.5 s real time)`, (await tx(page, '#time-left')) === '30' && (await tx(page, '#hp-player')).endsWith('100'));
   await page.click('#btn-start'); await waitState(page, 'playing');
@@ -144,9 +174,9 @@ async function active(browser, name, w, h, mode) {
 async function desktopFlow(browser) {
   const { context, page } = await pageFor(browser, { viewport: { width: 1280, height: 720 } }, 'flow');
   await page.goto(`${DRAFT}/`);
-  check('root opens the latest preview candidate (Fly the Simulation, 18 Oct) with Preview framing', (await tx(page, 'nav a[aria-current="page"]')).startsWith('18 Oct 2026') && (await page.isVisible('.preview-badge')));
+  check(PUB ? 'root opens the latest edition (Fly, 18 Oct), no preview framing' : 'root opens the latest preview candidate (Fly the Simulation, 18 Oct) with Preview framing', (await tx(page, 'nav a[aria-current="page"]')).startsWith('18 Oct 2026') && (PUB ? (await page.locator('.preview-badge').count()) === 0 : await page.isVisible('.preview-badge')));
   await page.goto(`${DRAFT}${GAME}`);
-  check('boxing dated route: selected 17 Oct preview, one real aria-current link', (await tx(page, 'nav a[aria-current="page"]')).startsWith(LABEL) && (await page.locator('.site-header a[aria-current="page"]').count()) === 1);
+  check('boxing dated route: selected 17 Oct, one real aria-current link', (await tx(page, 'nav a[aria-current="page"]')).startsWith(PUB ? '17 Oct 2026' : LABEL) && (await page.locator('.site-header a[aria-current="page"]').count()) === 1);
   await page.reload(); check('refresh keeps the dated route at Intro', (await st(page)) === 'intro');
   await Promise.all([page.waitForURL(`${DRAFT}/`), page.click('.site-header a.brand')]); await page.goBack(); await page.waitForURL(`${DRAFT}${GAME}`);
   check('back returns to the boxing Intro', (await st(page)) === 'intro');
@@ -165,7 +195,11 @@ async function desktopFlow(browser) {
   await page.keyboard.up('k');
   const head = await tx(page, '#result-headline');
   check('real-clock scripted win: headline, KO time, BEAT THE BUZZER, punchline, 80/0 HP, Retry/Share', head === 'KO! You beat the 30-second headline.' && /KO time: \d+\.\d\ds/.test(await tx(page, '#result-time')) && (await tx(page, '.stamp-line')).includes('BEAT THE BUZZER') && (await tx(page, '#payoff .punchline')) === 'Headline speedrun complete. The timeline can wait.' && /You: 80 HP · Jack: 0 HP/.test(await tx(page, '#result-health')) && (await page.isEnabled('#btn-retry')) && (await page.isEnabled('#btn-share')), head);
-  check('pre-release share is link-free', (await tx(page, '#btn-share')) === 'Copy result' && /Link sharing is off/.test(await tx(page, '#share-note')));
+  if (PUB) {
+    const time = ((await tx(page, '#result-time')).match(/(\d+\.\d\d)s/) || [])[1];
+    await page.evaluate(() => { /** @type {any} */ (window).__shared = []; navigator.share = async (d) => { /** @type {any} */ (window).__shared.push(d); }; });
+    check('public: the result offers "Share result"; Web Share receives the exact text with the dated production URL (never root/draft)', (await tx(page, '#btn-share')) === 'Share result' && (await (async () => { await page.click('#btn-share'); return JSON.stringify(await page.evaluate(() => /** @type {any} */ (window).__shared)); })()) === JSON.stringify([{ text: `I scored a KO in ${time}s in 30-Second KO. Can you beat my time? ${ORIGIN}/games/2026-10-17/` }]));
+  } else check('pre-release share is link-free', (await tx(page, '#btn-share')) === 'Copy result' && /Link sharing is off/.test(await tx(page, '#share-note')));
   await page.screenshot({ path: join(process.env.TMPDIR || '/tmp', 'verify-hosted-desktop-win.png'), fullPage: true });
   await page.click('#btn-retry');
   check('Retry after the win returns to a focused Intro (no countdown) with 100/30, overlay visible', (await st(page)) === 'intro' && (await page.evaluate(() => document.activeElement?.id)) === 'btn-start' && (await tx(page, '#time-left')) === '30' && (await page.isVisible('#panel-intro')));
@@ -174,15 +208,41 @@ async function desktopFlow(browser) {
   await context.close();
 }
 
+/** Hermetic local builds: the repository registry reproduces the artifact (public); an empty registry keeps the scaffold. */
+async function localBuilds() {
+  const tmp = await mkdtemp(join(tmpdir(), 'box-verify-'));
+  try {
+    const empty = join(tmp, 'empty.json'); await writeFile(empty, JSON.stringify({ schema: 1, editions: [] }));
+    const m = await build({ mode: 'public', outDir: join(tmp, 'scaffold'), releaseRegistry: empty });
+    /** @type {Buffer|null} */ let baseIdx = null; try { baseIdx = git('show', `${BASE}:public/index.html`); } catch { /* none */ }
+    check('local build with an EMPTY registry fixture keeps the base scaffold root and ships no games', m.root === 'scaffold' && !!baseIdx && (await readFile(join(tmp, 'scaffold', 'index.html'))).equals(baseIdx));
+    if (PUB) { const again = await build({ mode: 'public', outDir: join(tmp, 'again') }); check('local public build from the repository registry reproduces the dist tree hash', again.treeSha256 === JSON.parse((await local('build-manifest.json')).toString()).treeSha256); }
+  } finally { await rm(tmp, { recursive: true, force: true }); }
+}
+
+/** Real-clock scripted Fly win at the Fly route (its own verifier checks Fly in depth): keeps both games' wins covered here. */
+async function flyWin(browser) {
+  const { context, page } = await pageFor(browser, { viewport: { width: 1280, height: 800 } }, 'fly');
+  await page.goto(`${DRAFT}${FLY}`);
+  await page.click('#btn-start'); await page.waitForFunction(() => document.getElementById('game')?.dataset.state === 'running', null, { timeout: 8000, polling: 20 });
+  const s = await playReal(page, { timeoutMs: 40000 });
+  check('Fly real-clock scripted win: t=20.000 s, 7/7, exact heading', s?.state === 'won' && s.tUs === 20_000_000 && s.cleared === 7 && ((await page.textContent('#result-heading')) || '').trim() === 'You escaped the simulation.', JSON.stringify(s));
+  await page.click('#btn-again');
+  check('Fly Play again returns to a focused Intro', (await readSim(page))?.state === 'intro' && (await page.evaluate(() => document.activeElement?.id)) === 'btn-start');
+  await context.close();
+}
+
 let fatal = null; let browser;
 try {
   await http();
+  await localBuilds();
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   await desktopFlow(browser);
+  await flyWin(browser);
   for (const [n, w, h, mode] of [['320x568', 320, 568, 'portrait'], ['390x844', 390, 844, 'portrait'], ['667x375', 667, 375, 'landscape'], ['768x1024', 768, 1024, 'portrait'], ['1280x720', 1280, 720, 'desktop']]) await active(browser, n, w, h, mode);
 } catch (e) { fatal = /** @type {any} */ (e)?.stack || String(e); } finally { if (browser) await browser.close(); }
 check('no unexpected console/page errors (intentional 404 and the known widgets.js CSP self-test excluded)', problems.length === 0, problems.join(' | '));
-const bad = external.filter((h) => !/ (platform\.twitter\.com|syndication\.twitter\.com|cdn\.syndication\.twimg\.com|syndication\.x\.com|pbs\.twimg\.com|video\.twimg\.com)$/.test(h));
+const bad = external.filter((h) => !/ (platform\.twitter\.com|syndication\.twitter\.com|cdn\.syndication\.twimg\.com|syndication\.x\.com|pbs\.twimg\.com|video\.twimg\.com|abs-0\.twimg\.com)$/.test(h));
 check('only the documented X provider hosts were contacted (top-document + provider frames)', bad.length === 0, bad.join(','));
 if (providerErrors.length) notes.push(`third-party errors thrown inside X's own scripts (not our code, did not affect play): ${[...new Set(providerErrors)].join(' | ')} (x${providerErrors.length})`);
 notes.push(`external hosts contacted: ${[...new Set(external.map((h) => h.replace(/^\[[^\]]*\] /, '')))].sort().join(', ') || 'none'}`);

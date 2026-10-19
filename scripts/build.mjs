@@ -1,6 +1,6 @@
 import { build } from './lib/build-lib.mjs';
 
-// `node scripts/build.mjs` = public build (verified release registry only).
+// `node scripts/build.mjs` = public build (editions in releases/registry.json: verified releases or pending public candidates; draft-only until approved).
 // `node scripts/build.mjs --preview` = explicit preview build (candidate shown, labeled not released).
 const mode = process.argv.includes('--preview') ? 'preview' : 'public';
 const manifest = await build({ mode });

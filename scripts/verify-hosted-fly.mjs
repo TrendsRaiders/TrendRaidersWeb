@@ -1,8 +1,12 @@
 // Hosted-preview verifier for the Fly the Simulation edition (2026-10-18), r1. Written for this edition's manifest, assets,
 // routes, copy and geometry; it does NOT reuse scripts/verify-hosted.mjs (which hardcodes the boxing edition). Run it
-// against a draft after `npm run build:preview` of the SAME clean commit:
-//   node scripts/verify-hosted-fly.mjs --url <draft origin> --sha <40-hex commit> --out <evidence.json outside the repo>
-//        [--shots <dir outside the repo>] [--base <boxing r6 sha>] [--skip-real-win]
+// against a draft of the SAME clean commit:
+//   node scripts/verify-hosted-fly.mjs --url <draft origin> --sha <40-hex commit> --base <40-hex boxing baseline, e.g.
+//        b7321bab07dc8fd21df0207d747dbdfa4d8e5acf> [--mode preview|public] --out <evidence.json outside the repo>
+//        [--shots <dir outside the repo>] [--skip-real-win]
+// --base is REQUIRED (no built-in default: boxing must be byte-identical to it). --mode defaults to preview; build the SAME
+// commit in the matching mode first (`npm run build:preview` / `npm run build`). In public mode both editions are pending
+// candidates (staged, not approved or live), Fly is the root and the boxing page is Fly's Previous destination.
 // It compares hosted bytes with local dist/, checks effective headers incl. the _headers file, route/scaffold/boxing
 // preservation, real-clock scripted gameplay and measured geometry at the five named viewports. Scripted automation in
 // emulated viewports: NOT human, physical-device or screen-reader evidence, and it never asserts that the X post rendered
@@ -21,9 +25,13 @@ const arg = (n) => { const i = process.argv.indexOf(`--${n}`); return i > 0 ? pr
 const flag = (n) => process.argv.includes(`--${n}`);
 const DRAFT = (arg('url') || '').replace(/\/$/, '');
 const SHA = arg('sha') || '';
-const BASE = arg('base') || 'ff805726f7cab45a0cfed9cf16a66d0d1e86fb0a';
+const BASE = arg('base') || ''; // the boxing baseline SHA is REQUIRED (no default): boxing must be byte-identical to it
+const MODE = arg('mode') || 'preview'; // 'preview' (default) or 'public' (two pending release candidates)
+const PUB = MODE === 'public';
+const ORIGIN = 'https://empty-site-7f987b.netlify.app';
+const FLY_BASE = 'ef20ccb392005e0aef4325d4ede356cf79d571d9';
 const SHOTS = arg('shots') ? resolve(/** @type {string} */ (arg('shots'))) : '';
-if (!/^(https:\/\/|http:\/\/127\.0\.0\.1)/.test(DRAFT) || !/^[0-9a-f]{40}$/.test(SHA)) { console.error('usage: --url https://<draft origin> --sha <40-hex commit> [--out file] [--shots dir] [--base sha] [--skip-real-win]'); process.exit(2); }
+if (!/^(https:\/\/|http:\/\/127\.0\.0\.1)/.test(DRAFT) || !/^[0-9a-f]{40}$/.test(SHA) || !/^[0-9a-f]{40}$/.test(BASE) || !['preview', 'public'].includes(MODE)) { console.error('usage: --url https://<draft origin> --sha <40-hex commit> --base <40-hex boxing baseline commit, e.g. b7321bab07dc8fd21df0207d747dbdfa4d8e5acf> [--mode preview|public] [--out file] [--shots dir] [--skip-real-win]'); process.exit(2); }
 for (const p of [arg('out'), SHOTS]) if (p && resolve(p).startsWith(ROOT)) { console.error('refusing to write evidence inside the repository'); process.exit(2); }
 
 const ED = '2026-10-18'; const OLD = '2026-10-17';
@@ -39,12 +47,17 @@ const walk = async (d, base = d) => (await Promise.all((await readdir(d)).sort()
 // ---------------------------------------------------------------------------------------------------------------- HTTP
 async function http() {
   const lm = await local('build-manifest.json'); const man = JSON.parse(lm.toString());
-  check('local dist is the expected clean preview artifact for this SHA', man.mode === 'preview' && man.source?.commit === SHA && man.source?.dirty === false && man.source?.exactShaArtifact === true, JSON.stringify({ mode: man.mode, source: man.source }));
+  check(`local dist is the expected clean ${MODE} artifact for this SHA`, man.mode === MODE && man.source?.commit === SHA && man.source?.dirty === false && man.source?.exactShaArtifact === true, JSON.stringify({ mode: man.mode, source: man.source }));
   const hm = await get('/build-manifest.json');
   check('hosted manifest 200 and byte-identical to local', hm.status === 200 && hm.buf.equals(lm), `status ${hm.status}`);
   const hosted = JSON.parse(hm.buf.toString());
-  check('hosted manifest: full SHA, clean, exactShaArtifact, preview mode, same tree hash', hosted.source?.commit === SHA && hosted.source?.dirty === false && hosted.source?.exactShaArtifact === true && hosted.mode === 'preview' && hosted.treeSha256 === man.treeSha256, JSON.stringify(hosted.source));
-  check('manifest: root is the preview candidate, no released edition (public registry empty), both previews listed', hosted.root === 'preview-candidate' && (hosted.releasedEditions || []).length === 0 && JSON.stringify(hosted.previewEditions) === JSON.stringify([OLD, ED]), JSON.stringify({ root: hosted.root, released: hosted.releasedEditions, previews: hosted.previewEditions }));
+  check(`hosted manifest: full SHA, clean, exactShaArtifact, ${MODE} mode, same tree hash`, hosted.source?.commit === SHA && hosted.source?.dirty === false && hosted.source?.exactShaArtifact === true && hosted.mode === MODE && hosted.treeSha256 === man.treeSha256, JSON.stringify(hosted.source));
+  if (PUB) {
+    const pend = (hosted.releasedEditions || []);
+    check('manifest (public): root is the latest edition; no preview edition; BOTH editions listed as PENDING candidates with their source SHAs, origin and no timestamps (this artifact is staged, not a verified release)', hosted.root === 'latest-released' && (hosted.previewEditions || []).length === 0 && JSON.stringify(pend) === JSON.stringify([{ date: OLD, status: 'candidate-pending-approval', sourceSha: BASE, origin: ORIGIN }, { date: ED, status: 'candidate-pending-approval', sourceSha: FLY_BASE, origin: ORIGIN }]) && !/released_?at|publishedAt/i.test(JSON.stringify(hosted)), JSON.stringify({ root: hosted.root, released: pend, previews: hosted.previewEditions }));
+  } else {
+    check('manifest: root is the preview candidate, no released edition (preview build ignores pending candidates), both previews listed', hosted.root === 'preview-candidate' && (hosted.releasedEditions || []).length === 0 && JSON.stringify(hosted.previewEditions) === JSON.stringify([OLD, ED]), JSON.stringify({ root: hosted.root, released: hosted.releasedEditions, previews: hosted.previewEditions }));
+  }
   // exact manifest: every shipped file is listed (no silent omission) and every listed file exists locally with the same hash
   const localFiles = (await walk(join(ROOT, 'dist'))).filter((f) => f !== 'build-manifest.json');
   const listed = hosted.files.map((f) => f.path);
@@ -92,10 +105,18 @@ async function http() {
   const html = fly.buf.toString();
   const bare = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
   const has = (s) => html.includes(s);
-  check('HTML: preview framing, noindex, title, badge, current date link, no share URL', has('<meta name="robots" content="noindex">') && has('<title>Fly the Simulation — Preview (not released)</title>') && has('<span class="preview-badge" role="note">Preview — not released</span>') && has('aria-current="page">18 Oct 2026<span class="pv"> — Preview (not released)</span>') && has('"shareUrl":null'));
+  if (PUB) {
+    check('HTML (public): indexable, no preview framing, current date link, share URL is the dated production route', !has('name="robots"') && has('<title>Fly the Simulation</title>') && !/preview-badge|Preview \(not released\)|Preview — not released/.test(html) && has('aria-current="page">18 Oct 2026<span class="sr-only"> UTC edition</span>') && has(`"shareUrl":"${ORIGIN}${FLY}"`) && has('"mode":"public"'));
+  } else {
+    check('HTML: preview framing, noindex, title, badge, current date link, no share URL', has('<meta name="robots" content="noindex">') && has('<title>Fly the Simulation — Preview (not released)</title>') && has('<span class="preview-badge" role="note">Preview — not released</span>') && has('aria-current="page">18 Oct 2026<span class="pv"> — Preview (not released)</span>') && has('"shareUrl":null'));
+  }
   const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
   check('HTML: one compact nav; no About/tutorial/title in the header; About is a footer link after the News', (html.match(/<nav /g) || []).length === 1 && !/About|Reach the banana|<h1/.test(header) && has('<footer class="site-footer"><a id="link-about" class="footer-link" href="#about">About</a></footer>') && html.indexOf('id="link-about"') > html.indexOf('id="news"'));
-  check('HTML: Previous/Next are disabled with accessible names (the other preview is not a released neighbor)', has('None earlier<span class="sr-only"> — No earlier released game</span>') && has('None later<span class="sr-only"> — No later released game</span>') && !/<a class="gn-link"/.test(html));
+  if (PUB) {
+    check('HTML (public): Previous is a real link to the boxing route with its date, Next is a disabled None later (released neighbors only)', has(`<a class="gn-link" href="${BOX}" data-gn="prev">`) && has('17 Oct 2026<span class="sr-only"> UTC</span>') && has('None later<span class="sr-only"> — No later released game</span>') && /class="gn-link" disabled data-gn="next"/.test(html));
+  } else {
+    check('HTML: Previous/Next are disabled with accessible names (the other preview is not a released neighbor)', has('None earlier<span class="sr-only"> — No earlier released game</span>') && has('None later<span class="sr-only"> — No later released game</span>') && !/<a class="gn-link"/.test(html));
+  }
   check('HTML: exact recap, source date line, both sources, disclosure before the embed, ordinary link', has('Source date 17 October 2026; edition 18 October 2026 UTC') && has('On 17 October, Odyssey said it had placed a fruit-fly brain inside its Odyssey-3 world model and showed a demo it described as a fly navigating imagined worlds. CEO Oliver Cameron shared the demo with “Fly free lil’ buddy.” This game turns that premise into a fictional cartoon obstacle course: the rebuilding walls, banana escape and desktop reveal are our joke, not claims about the experiment.') && has('href="https://twitter.com/odysseyml/status/2111589148146749616"') && has('href="https://twitter.com/olivercameron/status/2111589310571147464"') && has('Official X post — loading may contact X and its media services and share network/device identifiers.') && html.indexOf('class="privacy"') < html.indexOf('id="embed-mount"'));
   check('HTML: Intro copy, nonmodal in-arena sections, separate steering and utility controls, no provider markup/hints', has('Reach the banana. Follow the dashed gap when the world rebuilds.') && has('↑/↓ or W/S: steer') && has('Hold ▲ / ▼ to steer') && !/aria-modal|role="dialog"|autofocus/.test(html) && html.indexOf('id="panel-intro"') > html.indexOf('id="arena"') && html.indexOf('id="utils"') > html.indexOf('id="steer"') && !/<iframe|rel="(preconnect|dns-prefetch|preload)"|<script[^>]+src="https?:/i.test(bare));
   const metaCsp = (html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/) || [])[1]?.replace(/&#39;/g, "'");
@@ -105,14 +126,20 @@ async function http() {
   return hosted;
 }
 
-/** Hermetic local check of the public build: empty released registry keeps the scaffold root and ships neither edition. */
-async function localPublic() {
+/** Hermetic local builds: an EMPTY registry keeps the scaffold root; in public mode the repository registry build must reproduce the artifact. */
+async function localBuilds() {
   const tmp = await mkdtemp(join(tmpdir(), 'fly-verify-public-'));
   try {
-    const m = await build({ mode: 'public', outDir: tmp });
-    const idx = await readFile(join(tmp, 'index.html')); const baseIdx = (() => { try { return git('show', `${BASE}:public/index.html`); } catch { return null; } })();
-    const files = await walk(tmp);
-    check('local PUBLIC build: empty release registry, scaffold root equals the base scaffold, no games, neither edition in any file', m.root === 'scaffold' && m.releasedEditions.length === 0 && !!baseIdx && idx.equals(baseIdx) && !files.some((f) => f.startsWith('games/')) && !(await Promise.all(files.map(async (f) => /2026-10-1[78]|Fly the Simulation|30-Second/.test((await readFile(join(tmp, f))).toString())))).some(Boolean), JSON.stringify({ root: m.root, files: files.length }));
+    const empty = join(tmp, 'empty.json'); await writeFile(empty, JSON.stringify({ schema: 1, editions: [] }));
+    const m = await build({ mode: 'public', outDir: join(tmp, 'scaffold'), releaseRegistry: empty });
+    const idx = await readFile(join(tmp, 'scaffold', 'index.html')); const baseIdx = (() => { try { return git('show', `${BASE}:public/index.html`); } catch { return null; } })();
+    const files = await walk(join(tmp, 'scaffold'));
+    check('local build with an EMPTY registry fixture: scaffold root equals the base scaffold, no games, neither edition in any file', m.root === 'scaffold' && m.releasedEditions.length === 0 && !!baseIdx && idx.equals(baseIdx) && !files.some((f) => f.startsWith('games/')));
+    if (PUB) {
+      const again = await build({ mode: 'public', outDir: join(tmp, 'again') });
+      const lm = JSON.parse((await local('build-manifest.json')).toString());
+      check('local public build from the repository registry reproduces the dist tree hash (same registry, same bytes)', again.treeSha256 === lm.treeSha256, `${again.treeSha256} vs ${lm.treeSha256}`);
+    }
   } finally { await rm(tmp, { recursive: true, force: true }); }
 }
 
@@ -169,7 +196,7 @@ async function viewportFlow(browser, vp) {
 async function desktopFlow(browser) {
   const { context, page } = await pageFor(browser, { viewport: { width: 1280, height: 800 } }, 'flow');
   await page.goto(`${DRAFT}/`);
-  check('root opens the labeled preview candidate', /^18 Oct 2026/.test(((await page.textContent('nav a[aria-current="page"]')) || '').trim()) && (await page.isVisible('.preview-badge')) && (await page.title()) === 'Fly the Simulation — Preview (not released)');
+  check(PUB ? 'root opens the latest edition (Fly, 18 Oct) without preview framing' : 'root opens the labeled preview candidate', /^18 Oct 2026/.test(((await page.textContent('nav a[aria-current="page"]')) || '').trim()) && (PUB ? (await page.locator('.preview-badge').count()) === 0 && (await page.title()) === 'Fly the Simulation' : (await page.isVisible('.preview-badge')) && (await page.title()) === 'Fly the Simulation — Preview (not released)'));
   await page.goto(`${DRAFT}${FLY}`);
   await page.reload(); check('refresh keeps the dated route at Intro', (await st(page)) === 'intro');
   await page.click('details.others > summary');
@@ -198,7 +225,7 @@ async function desktopFlow(browser) {
     await page.click('#btn-copy');
     await page.waitForFunction(() => !!document.getElementById('copy-note')?.textContent, null, { timeout: 5000 }).catch(() => {});
     const note = ((await page.textContent('#copy-note')) || '').trim();
-    check('Copy result is honest: either "Copied to clipboard." or a visible selectable fallback with the exact link-free text', note === 'Copied to clipboard.' || (/^Copy failed\./.test(note) && (await page.inputValue('#copy-text')) === 'I escaped the simulation. The banana was a desktop icon. — Fly the Simulation, 2026-10-18'), note);
+    check('Copy result is honest: either "Copied to clipboard." or a visible selectable fallback with the exact text (link-free in preview, the dated production URL in public)', note === 'Copied to clipboard.' || (/^Copy failed\./.test(note) && (await page.inputValue('#copy-text')) === `I escaped the simulation. The banana was a desktop icon. — Fly the Simulation, 2026-10-18${PUB ? ` ${ORIGIN}${FLY}` : ''}`), note);
     notes.push(`Copy result outcome on this hosted draft: "${note}"`);
     await page.click('#btn-again');
     check('Play again returns to a focused Intro', (await st(page)) === 'intro' && (await page.evaluate(() => document.activeElement?.id)) === 'btn-start');
@@ -209,13 +236,30 @@ async function desktopFlow(browser) {
   await context.close();
 }
 
+/** Real-clock scripted boxing win at the boxing route (its own verifier checks it in depth): keeps both games' wins covered here. */
+async function boxingWin(browser) {
+  const { context, page } = await pageFor(browser, { viewport: { width: 1280, height: 720 } }, 'boxing');
+  await page.goto(`${DRAFT}${BOX}`);
+  const bs = () => page.getAttribute('#app', 'data-state');
+  await page.click('#btn-start'); await page.waitForFunction(() => document.getElementById('app')?.dataset.state === 'playing', null, { timeout: 8000, polling: 20 });
+  const t0 = Date.now(); await page.keyboard.down('k');
+  while ((await bs()) === 'playing' && Date.now() - t0 < 40000) { if (await page.evaluate(() => !document.getElementById('counter-badge')?.hidden)) { await page.keyboard.press('Space'); await page.waitForTimeout(620); } else await page.waitForTimeout(10); }
+  await page.keyboard.up('k');
+  check('boxing real-clock scripted win: exact headline, KO time, BEAT THE BUZZER, 80/0 HP; Retry returns to Intro', (await bs()) === 'result' && ((await page.textContent('#result-headline')) || '').trim() === 'KO! You beat the 30-second headline.' && /KO time: \d+\.\d\ds/.test((await page.textContent('#result-time')) || '') && ((await page.textContent('.stamp-line')) || '').includes('BEAT THE BUZZER') && /You: 80 HP · Jack: 0 HP/.test((await page.textContent('#result-health')) || ''));
+  if (PUB) check('boxing (public): the result offers "Share result" (dated production link allowed), not the link-free copy', ((await page.textContent('#btn-share')) || '').trim() === 'Share result');
+  await page.click('#btn-retry');
+  check('boxing Retry returns to a focused Intro with 100/30', (await bs()) === 'intro' && (await page.evaluate(() => document.activeElement?.id)) === 'btn-start' && ((await page.textContent('#time-left')) || '').trim() === '30');
+  await context.close();
+}
+
 let fatal = null; let browser; let hosted = null;
 try {
   if (SHOTS) await mkdir(SHOTS, { recursive: true });
   hosted = await http();
-  await localPublic();
+  await localBuilds();
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   await desktopFlow(browser);
+  if (!flag('skip-real-win')) await boxingWin(browser);
   for (const vp of VIEWPORTS) await viewportFlow(browser, vp);
 } catch (e) { fatal = /** @type {any} */ (e)?.stack || String(e); } finally { if (browser) await browser.close(); }
 check('no unexpected console/page errors (intentional 404 and the known widgets.js CSP self-test excluded)', problems.length === 0, problems.join(' | '));

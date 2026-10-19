@@ -16,13 +16,14 @@ const read = (d, p) => readFileSync(join(d, p), 'utf8');
 const sha = (p) => createHash('sha256').update(readFileSync(join(root, p))).digest('hex');
 const walk = (d, base = d) => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n), base) : [join(d, n).slice(base.length + 1)]));
 const pub = join(tmp, 'public'); const prev = join(tmp, 'preview');
+const emptyReg = join(tmp, 'empty-registry.json');
 before(async () => {
-  await build({ mode: 'public', outDir: pub });
+  writeFileSync(emptyReg, JSON.stringify({ schema: 1, editions: [] }));
+  await build({ mode: 'public', outDir: pub, releaseRegistry: emptyReg }); // empty registry fixture; the repo registry holds the two public candidates
   await build({ mode: 'preview', outDir: prev });
 });
 
-test('public build: the released registry is empty, so root stays the scaffold and neither edition is published', () => {
-  assert.deepEqual(JSON.parse(readFileSync(join(root, 'releases', 'registry.json'), 'utf8')).editions, []);
+test('public build with an EMPTY registry fixture: root stays the scaffold and neither edition is published', () => {
   assert.match(read(pub, 'index.html'), /<h1>Hello, world!<\/h1>/);
   assert.equal(existsSync(join(pub, 'games')), false);
   const all = walk(pub).map((f) => read(pub, f)).join('\n');
@@ -67,6 +68,8 @@ test('direct route page is framed as a preview, never as released, and links no 
 test('boxing edition, scaffold, release registry, shared build code and site CSS are preserved byte for byte', () => {
   // r7 (lower mobile Pause) legitimately changed the boxing game.css, index.html and js/main.js and its notes; these pins
   // now track the r7 files. Everything else here (Fly, shared build code, site CSS, engine, scaffold, registry) is unchanged.
+  // public-release integration legitimately changed releases/registry.json (two pending candidates) and build-lib.mjs
+  // (candidate registry entries); the games, Fly, site CSS and scaffold pins below are untouched.
   const pinned = {
     'games/2026-10-17/edition.json': 'aeef498083d1cd221191ef6c22dc6646d4751ee4de4b7cc9bef171ba9e4ebf1f',
     'games/2026-10-17/game.css': 'adb69ebd1bc7ae1c67e1054abf98c646d8bcefe741294deeffe67886b05ddd63',
@@ -79,8 +82,8 @@ test('boxing edition, scaffold, release registry, shared build code and site CSS
     'games/2026-10-17/js/share.js': '04d21a063ed9895e26191aef1bd041ccffca3d2d031e96fd1246108a0ce7ec51',
     'public/index.html': '30336adeab1328b33f39f858663311a4dd9fcde02788b15762d1664755ee009d',
     'public/styles.css': '7eb90602b2dcd8a66eff78ca5371ff87adc70d9287593daff88213d2dda43b4b',
-    'releases/registry.json': '9e4d1f778021927463eeef76e90018f1e809bd20674359605b0847144544f937',
-    'scripts/lib/build-lib.mjs': '3b30b12b2af5baf7dd7367bc45119d3fb601ebc66811882f8eae5c683fcd6591',
+    'releases/registry.json': '26c870da227da4c4c93921ab16002594f1c609c3926a55fb598e4d1ea64837b7',
+    'scripts/lib/build-lib.mjs': 'a999873a732f08acdd57a948d33d1b8d9062e0d33f33f24e5545e11d0d3b03d5',
     'site/site.css': '5991ffd6be16f0687a9dfd3318104f584af5dbc49798675f39a23f735accfad5',
   };
   for (const [f, h] of Object.entries(pinned)) assert.equal(sha(f), h, `${f} changed`);

@@ -16,8 +16,15 @@ export const CHROMIUM = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
  * realPreview: build with the repository's actual preview registry (both candidates, as staged). By default the boxing
  *   suites keep their original single-candidate preview site (an explicit boxing-only preview registry), so they are unchanged.
  */
-export async function setup({ released = false, fixture = null, realPreview = false } = {}) {
+export async function setup({ released = false, fixture = null, realPreview = false, publicCandidate = false } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'tr-browser-'));
+  if (publicCandidate) {
+    // The repository's PUBLIC build (two pending release candidates), served exactly as built. Nothing is deployed.
+    await build({ mode: 'public', outDir: join(tmp, 'dist') });
+    const host = await serve(join(tmp, 'dist'));
+    const browser = await chromium.launch({ executablePath: CHROMIUM, args: ['--no-sandbox'] });
+    return { host, browser, async close() { await browser.close(); await host.close(); rmSync(tmp, { recursive: true, force: true }); } };
+  }
   const regPath = join(tmp, 'registry.json');
   const entry = (date) => ({ date, verified: true, sha: 'abc1234', origin: 'https://games.example.test', verification: 'fixture-only (browser test)' });
   const releaseDates = fixture ? fixture.release : released ? ['2026-10-17'] : [];

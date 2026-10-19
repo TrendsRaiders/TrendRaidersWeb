@@ -1,5 +1,7 @@
 // Static site builder. Modes:
-//   public  - only editions in the verified release registry get routes/navigation (default; production gate).
+//   public  - only editions listed in releases/registry.json get routes/navigation (default). Entries are either verified
+//             releases or PENDING public candidates (staged for a draft only; not live, not approved).
+//             Listing an edition here is integration, never approval.
 //   preview - additionally exposes preview-registry candidates with conspicuous "not released" framing.
 import { cp, rm, mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -17,7 +19,17 @@ export function shortDate(date) {
 }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-/** Validate the release registry. Every entry needs explicit verification evidence; nothing is inferred. */
+/**
+ * Validate the release registry. Two entry kinds, nothing is inferred:
+ *  - verified release:  { date, verified: true, sha, origin, verification }
+ *  - PUBLIC CANDIDATE (staged, NOT live, awaiting exact-SHA PM + human approval):
+ *      { date, verified: false, status: 'candidate-pending-approval', sourceSha, origin, approval }
+ *    A candidate entry makes the PUBLIC build include the edition (routes, nav, root, dated share URL) so the exact
+ *    artifact can be staged as a DRAFT and verified; it is not a claim that a release happened. Candidates stay
+ *    draft-only until exact-SHA PM acceptance, explicit human production approval of that exact SHA/destination AND the verified production safeguards in deployment.md are all required first; merging or publishing never grants approval.
+ *    There is deliberately NO release timestamp anywhere: an edition date is not a release date.
+ */
+export const CANDIDATE_STATUS = 'candidate-pending-approval';
 export function validateReleaseRegistry(reg) {
   if (!reg || reg.schema !== 1 || !Array.isArray(reg.editions)) throw new Error('release registry: expected {schema:1, editions:[]}');
   const seen = new Set();
@@ -25,9 +37,16 @@ export function validateReleaseRegistry(reg) {
     if (!DATE_RE.test(e.date || '')) throw new Error(`release registry: bad date ${JSON.stringify(e.date)}`);
     if (seen.has(e.date)) throw new Error(`release registry: duplicate ${e.date}`);
     seen.add(e.date);
+    if (!/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(e.origin || '')) throw new Error(`release registry: ${e.date} needs an https origin without path`);
+    if (e.verified === false) {
+      if (e.status !== CANDIDATE_STATUS) throw new Error(`release registry: ${e.date} is not verified:true and not a ${CANDIDATE_STATUS} entry`);
+      if (!/^[0-9a-f]{40}$/.test(e.sourceSha || '')) throw new Error(`release registry: ${e.date} candidate needs the full sourceSha of its game files`);
+      if (!e.approval || typeof e.approval !== 'string' || !/pending/i.test(e.approval)) throw new Error(`release registry: ${e.date} candidate needs an approval note that says it is pending`);
+      for (const k of ['releasedAt', 'released_at', 'publishedAt']) if (k in e) throw new Error(`release registry: ${e.date} must not carry ${k} (edition date is not a release date)`);
+      continue;
+    }
     if (e.verified !== true) throw new Error(`release registry: ${e.date} is not verified:true`);
     if (!/^[0-9a-f]{7,64}$/.test(e.sha || '')) throw new Error(`release registry: ${e.date} needs the verified build sha`);
-    if (!/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(e.origin || '')) throw new Error(`release registry: ${e.date} needs an https origin without path`);
     if (!e.verification || typeof e.verification !== 'string') throw new Error(`release registry: ${e.date} needs a verification/authorization reference`);
   }
   return reg;
@@ -58,8 +77,10 @@ const cspMeta = () => `<meta http-equiv="Content-Security-Policy" content="${esc
 const HEADERS_FILE = `/*\n  Content-Security-Policy: ${CSP}; frame-ancestors 'none'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
 
 /**
- * Previous/Next from verified RELEASED editions only (strictly earlier / later by UTC date). The selected
- * edition, even a preview candidate, only anchors the comparison and is never a destination.
+ * Previous/Next destinations come from the entries the build treats as published: verified releases and, in the PUBLIC
+ * build, pending public candidates (a prospective integration that is NOT live until the approval gates pass).
+ * Preview candidates (`preview: true`) are never destinations. The selected edition only anchors the comparison.
+ * Strictly earlier / later by UTC date; missing days are skipped.
  */
 export function gameNeighbors(entries, currentDate) {
   const released = entries.filter((e) => !e.preview).map((e) => e.date).sort();
@@ -176,7 +197,10 @@ export async function build(o = {}) {
   const gamesDir = o.gamesDir ?? join(ROOT, 'games');
   const publicDir = o.publicDir ?? join(ROOT, 'public');
   const siteDir = o.siteDir ?? join(ROOT, 'site');
-  const released = validateReleaseRegistry(await readJson(o.releaseRegistry ?? join(ROOT, 'releases', 'registry.json'))).editions;
+  const allReleased = validateReleaseRegistry(await readJson(o.releaseRegistry ?? join(ROOT, 'releases', 'registry.json'))).editions;
+  // Pending public candidates are not verified releases: only the PUBLIC build treats them as published editions.
+  // The preview build ignores them so it keeps showing the labeled, noindex, link-free preview candidates.
+  const released = mode === 'preview' ? allReleased.filter((e) => e.status !== CANDIDATE_STATUS) : allReleased;
   const releasedDates = new Set(released.map((e) => e.date));
 
   /** @type {{date:string, preview:boolean, origin?:string}[]} */
@@ -237,7 +261,7 @@ export async function build(o = {}) {
   return writeManifest(outDir, {
     mode,
     root: rootKind,
-    releasedEditions: released.map((e) => ({ date: e.date, sha: e.sha, origin: e.origin })),
+    releasedEditions: released.map((e) => (e.status === CANDIDATE_STATUS ? { date: e.date, status: e.status, sourceSha: e.sourceSha, origin: e.origin } : { date: e.date, sha: e.sha, origin: e.origin })),
     previewEditions: entries.filter((e) => e.preview).map((e) => e.date),
   }, o);
 }

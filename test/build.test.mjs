@@ -14,8 +14,12 @@ const out = (n) => join(tmp, n);
 const read = (dir, p) => readFileSync(join(dir, p), 'utf8');
 after(() => rmSync(tmp, { recursive: true, force: true }));
 
+const emptyReg = join(tmp, 'empty-registry.json');
 before(async () => {
-  await build({ mode: 'public', outDir: out('public') });
+  // Scaffold/empty-registry behavior is tested against an explicit EMPTY registry; the repository registry now lists the
+  // two public release candidates (see test/public-release.test.mjs).
+  writeFileSync(emptyReg, JSON.stringify({ schema: 1, editions: [] }));
+  await build({ mode: 'public', outDir: out('public'), releaseRegistry: emptyReg });
   await build({ mode: 'preview', outDir: out('preview') });
 });
 
@@ -84,7 +88,7 @@ test('manifest hashes match the files and are reproducible', async () => {
     assert.equal(createHash('sha256').update(readFileSync(join(d, f.path))).digest('hex'), f.sha256, f.path);
   }
   assert.ok(!m.files.some((f) => f.path === 'build-manifest.json'));
-  const again = await build({ mode: 'public', outDir: out('public2') });
+  const again = await build({ mode: 'public', outDir: out('public2'), releaseRegistry: emptyReg });
   assert.equal(again.treeSha256, m.treeSha256);
 });
 
@@ -104,7 +108,7 @@ test('hosting env such as Netlify URL never creates a release or share link', as
 
 test('npm run build CLI works and both builds leave dist/ untracked output only', () => {
   execFileSync(process.execPath, [join(root, 'scripts', 'build.mjs')], { stdio: 'pipe' });
-  assert.deepEqual(readdirSync(join(root, 'dist')).sort(), ['404.html', '_headers', 'assets', 'build-manifest.json', 'index.html', 'styles.css']);
+  assert.deepEqual(readdirSync(join(root, 'dist')).sort(), ['404.html', '_headers', 'assets', 'build-manifest.json', 'games', 'index.html', 'styles.css'], 'public candidate: scaffold files plus the two candidate editions');
 });
 
 test('netlify config builds to dist without production settings or redirects that alias dates', () => {
@@ -114,8 +118,18 @@ test('netlify config builds to dist without production settings or redirects tha
   assert.doesNotMatch(toml, /\[\[redirects\]\]|--prod|\[context/);
 });
 
-test('release registry is empty in the repository (no placeholder releases)', () => {
-  assert.deepEqual(JSON.parse(readFileSync(join(root, 'releases', 'registry.json'), 'utf8')).editions, []);
+test('repository registry lists only PENDING candidates: nothing verified, no timestamps, exact game-file baselines', () => {
+  const reg = JSON.parse(readFileSync(join(root, 'releases', 'registry.json'), 'utf8'));
+  assert.deepEqual(reg.editions.map((e) => e.date), ['2026-10-17', '2026-10-18']);
+  for (const e of reg.editions) {
+    assert.equal(e.verified, false);
+    assert.equal(e.status, 'candidate-pending-approval');
+    assert.match(e.approval, /^pending/);
+    assert.equal(e.origin, 'https://empty-site-7f987b.netlify.app');
+    assert.deepEqual(Object.keys(e).filter((k) => /released|published|At$/.test(k)), [], 'an edition date is not a release date');
+  }
+  assert.equal(reg.editions[0].sourceSha, 'b7321bab07dc8fd21df0207d747dbdfa4d8e5acf');
+  assert.equal(reg.editions[1].sourceSha, 'ef20ccb392005e0aef4325d4ede356cf79d571d9');
 });
 
 test('manifest records local git source and marks dirty trees as not exact-SHA artifacts', async () => {
