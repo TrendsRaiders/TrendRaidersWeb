@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  {{csp}}
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  {{robots}}
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/site.css">
+  <link rel="stylesheet" href="/games/2026-10-19/game.css">
+  <script type="application/json" id="site-config">{{config}}</script>
+  <script type="module" src="/games/2026-10-19/js/main.js"></script>
+</head>
+<body class="bigfoot">
+<div id="page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  {{banner}}
+  {{nav}}
+  <main id="main">
+    <section id="game" class="play-panel" aria-labelledby="game-title" data-state="intro">
+      <h1 id="game-title" class="sr-only">Bigfoot: Take Two — <time datetime="2026-10-19">19 October 2026 (UTC)</time></h1>
+      <noscript><p class="notice">Bigfoot: Take Two needs JavaScript. The news recap, sources and About below are readable without it.</p></noscript>
+
+      <div id="strip" class="strip">
+        <p class="hud-item">Shot <span id="shot-n">1</span>/5</p>
+        <p class="hud-item">Usable <span id="usable-n">0</span>/4</p>
+      </div>
+
+      <div id="play-region" class="play-region" role="group" aria-label="Play area: stage and POSE button">
+        <div id="arena" class="arena" tabindex="-1" role="group" aria-label="Stage. The monster walks left to right. Press Space or Enter, or tap, when its feet reach the taped mark. Escape pauses.">
+          <canvas id="scene" role="img" aria-label="Pixel stage: a homemade teal monster waddles toward a taped mark on a cardboard forest set" data-scale="1"></canvas>
+          <p id="cue" class="cue" aria-hidden="true" hidden></p>
+
+          <section id="panel-intro" class="overlay intro" aria-label="How to play">
+            <p id="intro-goal" class="intro-goal">Get 4 of 5 usable shots.</p>
+            <p id="intro-controls" class="intro-controls">The monster walks. Tap POSE when its feet reach the tape. Space / Enter or the POSE button.</p>
+            <button type="button" id="btn-start" class="btn primary start">Start</button>
+          </section>
+
+          <section id="panel-paused" class="overlay paused" aria-labelledby="paused-heading" hidden>
+            <h2 id="paused-heading" class="ov-title" tabindex="-1">Paused</h2>
+            <p>The shot is frozen. Resume continues from here.</p>
+            <p id="room-note" class="room-note" hidden>More room needed. Rotate your device or scroll to the stage.</p>
+            <div class="ov-row">
+              <button type="button" id="btn-resume" class="btn primary">Resume</button>
+              <button type="button" id="btn-restart-paused" class="btn">Restart</button>
+            </div>
+          </section>
+
+          <section id="panel-result" class="overlay result" aria-labelledby="result-heading" data-pos="bottom" hidden>
+            <h2 id="result-heading" class="ov-title" tabindex="-1">Result</h2>
+            <ol id="contact" class="contact" aria-label="Contact sheet"></ol>
+            <p id="result-copy" class="result-copy"></p>
+            <div class="ov-row">
+              <button type="button" id="btn-retry" class="btn primary">Retry</button>
+              <button type="button" id="btn-replay" class="btn" hidden>Replay reveal</button>
+              <button type="button" id="btn-share" class="btn" hidden>Share</button>
+            </div>
+            <p id="share-note" class="share-note" hidden></p>
+            <textarea id="share-text" class="share-text" readonly rows="3" aria-label="Result text to copy" hidden></textarea>
+          </section>
+          <button type="button" id="btn-skip" class="btn skip-reveal" hidden>Skip reveal</button>
+        </div>
+
+        <div id="pose-row" class="pose-row">
+          <button type="button" id="btn-pose" class="pose" disabled>POSE</button>
+        </div>
+      </div>
+
+      <div id="utils" class="utils">
+        <button type="button" id="btn-pause" class="util" disabled aria-pressed="false"><span class="u-ico" aria-hidden="true">❚❚</span><span class="u-txt">Pause</span></button>
+        <button type="button" id="btn-restart" class="util" disabled><span class="u-ico" aria-hidden="true">↻</span><span class="u-txt">Restart</span></button>
+        <button type="button" id="btn-sound" class="util" aria-pressed="false"><span class="u-ico" aria-hidden="true">♪</span><span class="u-txt">Sound: off</span></button>
+      </div>
+      <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="news" class="news" aria-labelledby="news-heading">
+      <h2 id="news-heading">News behind the game</h2>
+      <p class="news-date"><strong>Source date 18 October 2026; edition 19 October 2026 UTC</strong></p>
+      <p class="news-body">On October 18, 2026, Variety posted a review of Marq Evans’s documentary <em>Capturing Bigfoot</em>. Film accounts also circulated claims of rehearsal footage; those claims are not an independently established verdict on the historical film. Our cardboard forest and homemade monster are fictional: your job is simply to get a usable take.</p>
+      <h3 class="sources-heading">Sources</h3>
+      <ol class="sources">
+        <li><a id="link-variety" href="https://twitter.com/Variety/status/2111896526234505466" rel="noopener noreferrer">Variety (@Variety), review post on X</a>, October 18, 2026, <time datetime="2026-10-18T19:05:43Z">2026-10-18 19:05:43 UTC</time> (primary source)</li>
+        <li><a id="link-cinesthetic" href="https://twitter.com/TheCinesthetic/status/2111938893193023829" rel="noopener noreferrer">The Cinesthetic (@TheCinesthetic), post on X reporting a rehearsal-footage claim</a>, October 18, 2026, <time datetime="2026-10-18T21:54:04Z">2026-10-18 21:54:04 UTC</time>. Attribution is not corroboration.</li>
+      </ol>
+      <p class="provenance">These links show that a review and a discussion were posted. We did not watch the documentary or any historical footage, and nothing here endorses a claim.</p>
+
+      <section id="source-post" class="source-card" aria-labelledby="source-post-heading">
+        <h3 id="source-post-heading">Source post: Variety on X</h3>
+        <p class="privacy">Official X embed loads automatically. X may receive your IP address and browser/device identifiers and request media. The game works without it.</p>
+        <div id="embed-area" class="embed-area" data-embed-state="idle">
+          <p id="embed-status" class="embed-status" role="status"></p>
+          <div id="embed-mount" class="embed-mount"></div>
+        </div>
+        <p><a id="link-open-x" class="linkbtn" href="https://twitter.com/Variety/status/2111896526234505466" rel="noopener noreferrer">Open the Variety post on X</a></p>
+      </section>
+    </section>
+
+    <section id="about" class="about" aria-labelledby="about-heading">
+      <h2 id="about-heading">About Bigfoot: Take Two</h2>
+      <p>You are a homemade movie monster on a suspiciously cheap forest set. The performer walks on its own; your only action is <strong>POSE</strong> when its feet reach the taped mark. A good shutter records the pose; a bad one records an embarrassing rehearsal. Five shots at most, four usable frames to win.</p>
+      <ul>
+        <li>Each shot starts with a short <strong>ROLLING</strong> lead-in, then the monster walks. The bracketed strip on the floor is the usable window; the center tape is its middle.</li>
+        <li>Space or Enter (while focus is on the stage or POSE), the POSE button, or a tap on the stage all do the same thing. Holding a key does not repeat.</li>
+        <li>Pose too early, too late or not at all and the shot is a miss. Two misses end the attempt; Retry returns to this introduction. Nothing is random.</li>
+        <li>Pause, Restart and the optional sound toggle sit below the stage. Escape pauses while focus is in the game. Switching windows or hiding the page pauses automatically and never resumes by itself.</li>
+        <li>Winning shows a short optional reveal; Replay reveal never changes your result. Sharing is optional and never posts anything for you.</li>
+      </ul>
+      <p>This is a fictional cartoon. The cardboard forest, the crew and the costume are invented for the joke; none of it explains or recreates any real film, and the game makes no claim about whether Bigfoot exists or about any real person. It is not affiliated with or endorsed by Variety, The Cinesthetic, anyone named in the news or any film. All art is original and sound is off unless you turn it on.</p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <nav aria-label="About, news and sources" class="footer-nav">
+      <a id="link-about" class="footer-link" href="#about">About</a>
+      <a id="link-news" class="footer-link" href="#news">News</a>
+      <a class="footer-link" href="https://twitter.com/Variety/status/2111896526234505466" rel="noopener noreferrer">Variety post (X)</a>
+      <a class="footer-link" href="https://twitter.com/TheCinesthetic/status/2111938893193023829" rel="noopener noreferrer">The Cinesthetic post (X)</a>
+    </nav>
+  </footer>
+</div>
+</body>
+</html>

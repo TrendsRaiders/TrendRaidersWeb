@@ -1,0 +1,201 @@
+/* Bigfoot: Take Two: flat retro UI, game-first. Solid fills and crisp outlines only; nothing translucent.
+   Colour never carries meaning alone: words, check/cross shapes and bracket shapes always accompany it. */
+.bigfoot {
+  --hdr-h: 48px;     /* header content height (phone portrait: one row of 44px targets) */
+  --ctl-h: 44px;     /* header control height */
+  --pose-h: 60px;
+  --hot: #ffe14a;
+  --top: 4px;        /* gap between the header and the play panel */
+  --bottom: 6px;     /* breathing room under the utility row */
+}
+.bigfoot main { padding-top: 0; }
+
+/* ---- header: ONE compact row at every size (identity/preview status, Previous / date / Next, date chooser) ---- */
+.bigfoot .site-header { padding: env(safe-area-inset-top, 0px) 0 0; height: calc(var(--hdr-h) + env(safe-area-inset-top, 0px)); }
+.bigfoot .hdr { flex-wrap: nowrap; align-items: center; gap: 6px; height: var(--hdr-h); max-width: 1100px; }
+.bigfoot .hdr .ident, .bigfoot .hdr.has-others .ident { flex: 0 0 auto; min-height: 0; padding: 0; }
+.bigfoot .site-nav { flex: 1 1 auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bigfoot .site-nav .steps { flex: 1 1 auto; display: grid; grid-template-columns: var(--ctl-h) minmax(0, 1fr) var(--ctl-h); gap: 6px; min-width: 0; }
+.bigfoot .gn-link, .bigfoot .date-link, .bigfoot .others > summary { min-height: var(--ctl-h); height: var(--ctl-h); padding: 0 6px; font-size: 0.9375rem; white-space: nowrap; overflow: hidden; }
+.bigfoot .gn-link { min-width: var(--ctl-h); }
+/* Previous / Next: arrow only on phones; the words stay in the accessible name */
+.bigfoot .gn-text { font-size: 0; }
+.bigfoot .gn-text > span[aria-hidden="true"] { font-size: 1.25rem; line-height: 1; }
+.bigfoot .gn-link small { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.bigfoot .gn-link { position: relative; }
+.bigfoot .date-link { flex-direction: row; justify-content: center; align-items: center; gap: 4px; text-align: center; }
+.bigfoot .preview-badge { font-size: 0; padding: 0 6px; display: inline-flex; align-items: center; height: 28px; }
+.bigfoot .preview-badge::before { content: "Preview"; font-size: 0.8125rem; line-height: 1; }
+.bigfoot .others { position: relative; top: auto; right: auto; flex: 0 0 auto; }
+.bigfoot .others > summary { min-width: var(--ctl-h); width: var(--ctl-h); font-size: 0; padding: 0; }
+.bigfoot .others > summary::after { font-size: 1.125rem; content: "▾"; }
+.bigfoot .others[open] > summary::after { content: "▴"; }
+.bigfoot .others > ul { right: 0; max-height: 60svh; }
+.bigfoot .pv { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.bigfoot .hdr.has-others .brand, .bigfoot .brand { display: none; }
+@media (min-width: 600px) {
+  .bigfoot { --ctl-h: 40px; --hdr-h: 44px; }
+  .bigfoot .hdr { gap: 10px; }
+}
+/* the verbose header (words, full preview label, brand) only where there is room */
+@media (min-width: 900px) {
+  .bigfoot .hdr.has-others .brand, .bigfoot .brand { display: inline-flex; }
+  .bigfoot .pv { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; white-space: nowrap; }
+  .bigfoot .preview-badge { font-size: 0.8125rem; height: auto; padding: 2px 6px; }
+  .bigfoot .preview-badge::before { content: none; }
+  .bigfoot .site-nav .steps { flex: 0 1 auto; display: flex; gap: 8px; }
+  .bigfoot .gn-link { padding: 0 10px; width: auto; }
+  .bigfoot .date-link { width: auto; padding: 0 10px; }
+  .bigfoot .gn-text { font-size: 0.9375rem; }
+  .bigfoot .site-nav { justify-content: flex-start; }
+  .bigfoot .others > summary { width: auto; font-size: 0.9375rem; padding: 0 10px; }
+  .bigfoot .others > summary::after { font-size: 0.9375rem; content: " ▾"; }
+  .bigfoot .others[open] > summary::after { content: " ▴"; }
+}
+
+
+/* ---- play panel: one grid, recomposed per layout (phone portrait is the base) ---- */
+.bigfoot .play-panel {
+  display: grid; margin: var(--top) auto 0; max-width: 1100px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(220px, 1fr) var(--pose-h) auto;
+  align-content: space-between;
+  grid-template-areas: "strip" "arena" "pose" "utils";
+  row-gap: 8px;
+  /* min-height, not height: when the minimums cannot fit (tiny screens, large text) the document scrolls instead of clipping */
+  min-height: calc(100svh - var(--hdr-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--top) - var(--bottom));
+}
+.play-region { display: contents; }
+.strip { grid-area: strip; display: flex; align-items: center; gap: 16px; min-height: 28px; min-width: 0; }
+.strip p { margin: 0; }
+.hud-item { font-size: 1rem; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.arena {
+  grid-area: arena; position: relative; min-height: 0; overflow: hidden; background: #f7c27c;
+  outline: 2px solid var(--line); outline-offset: -2px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  touch-action: manipulation; /* the gameplay surface only: the rest of the page scrolls and zooms normally */
+  height: 100%; max-height: 64svh; align-self: start; /* phone portrait: stage about 55-65% of the visible viewport */
+}
+.arena:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.arena > canvas { position: absolute; left: 0; top: 0; display: block; width: 100%; height: 100%; image-rendering: crisp-edges; image-rendering: pixelated; }
+.cue {
+  position: absolute; z-index: 2; left: 50%; top: 8px; transform: translateX(-50%); margin: 0; padding: 2px 12px;
+  font-size: 1.25rem; line-height: 1.3; font-weight: 900; letter-spacing: 0.04em; white-space: nowrap; pointer-events: none;
+  background: #14141f; color: #fff; border: 3px solid #fff;
+}
+.cue[hidden] { display: none; }
+.cue[data-kind="ok"] { background: #0f4d24; }
+.cue[data-kind="bad"] { background: #7a1428; }
+
+/* ---- nonmodal in-arena sections: Intro, Paused, Result ---- */
+.overlay {
+  position: absolute; z-index: 3; box-sizing: border-box; max-height: calc(100% - 12px); overflow: auto;
+  background: var(--panel); border: 3px solid var(--fg); padding: 8px 12px; display: grid; gap: 6px; font-size: 1rem; line-height: 1.3; color: var(--fg);
+}
+.overlay[hidden] { display: none; }
+.overlay p, .overlay h2 { margin: 0; }
+.intro, .paused { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(calc(100% - 16px), 420px); }
+.ov-title { font-size: 1.125rem; line-height: 1.15; }
+.ov-title:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.intro-goal { font-size: 1.125rem; font-weight: 800; }
+.ov-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.ov-row .btn { flex: 1 1 auto; min-height: 44px; }
+.overlay .start { min-height: 48px; margin-top: 2px; font-size: 1.0625rem; }
+.room-note { font-weight: 700; color: var(--hot); }
+.result { width: auto; }
+.result[data-pos="bottom"] { left: 8px; right: 8px; bottom: 8px; }
+.result[data-pos="right"] { right: 8px; top: 8px; bottom: 8px; width: min(46%, 280px); align-content: start; gap: 4px; padding: 6px 10px; }
+.result-copy { font-size: 1.0625rem; font-weight: 900; line-height: 1.2; }
+.share-note { font-size: 0.9375rem; font-weight: 600; }
+.share-text { width: 100%; font: inherit; color: #000; background: #fff; padding: 6px; }
+.contact { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
+.contact li { display: grid; justify-items: center; gap: 1px; padding: 3px 3px 2px; background: #fff; border: 2px solid #14141f; color: #14141f; font-weight: 900; font-size: 0.875rem; line-height: 1.1; min-width: 44px; }
+.contact li canvas { display: block; width: 36px; height: 30px; image-rendering: pixelated; }
+.contact li[data-kind="usable"] { border-color: #1c8c3c; }
+.contact li[data-kind="unused"] { border-style: dashed; color: #4b5560; }
+.contact li[data-kind="early"], .contact li[data-kind="late"], .contact li[data-kind="missed"] { border-color: #c2283c; }
+.skip-reveal { position: absolute; z-index: 4; left: 8px; top: 8px; min-height: 44px; }
+.skip-reveal[hidden] { display: none; }
+
+/* ---- POSE row and utility row (separate rows below the stage, never over the tap surface) ---- */
+.pose-row { grid-area: pose; display: grid; min-width: 0; }
+.pose {
+  min-height: 56px; width: 100%; font: inherit; font-size: 1.5rem; font-weight: 900; letter-spacing: 0.08em; line-height: 1.1; color: #1a1400;
+  background: var(--accent); border: 3px solid #fff; border-radius: 0; padding: 4px 8px; text-align: center; cursor: pointer;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.pose:disabled { color: var(--muted); background: var(--panel); border-color: var(--line); border-style: dashed; cursor: default; }
+.pose[aria-disabled="true"] { background: #7a5a2a; color: #fff; border-style: dashed; cursor: default; }
+.utils { grid-area: utils; margin-top: 16px; display: flex; gap: 8px; justify-content: flex-start; align-items: center; flex-wrap: wrap; }
+.util {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 72px; min-height: 44px; height: 44px; padding: 0 10px;
+  font: inherit; font-size: 0.9375rem; font-weight: 700; color: var(--fg); background: var(--panel); border: 2px solid var(--line); border-radius: 0; cursor: pointer;
+}
+.util:disabled { color: var(--muted); border-style: dashed; cursor: default; }
+.util[aria-pressed="true"] { background: #2a3566; border-color: var(--fg); }
+.u-ico { font-size: 0.875rem; line-height: 1; }
+
+/* ---- state-driven visibility ---- */
+.play-panel[data-state="intro"] .cue { display: none; }
+
+/* ---- news, source card, About, footer: below the game, never inside the play footprint ---- */
+.news, .about { margin: 24px auto 0; max-width: 46rem; border-top: 2px solid var(--line); padding-top: 8px; }
+.news h2, .about h2 { margin: 6px 0; }
+.sources-heading { margin: 12px 0 4px; font-size: 1.05rem; }
+.sources { margin: 0; padding-left: 1.4rem; }
+.sources li { margin-bottom: 6px; }
+.provenance { margin: 8px 0 0; color: var(--muted); }
+.source-card { margin-top: 16px; border: 2px solid var(--line); padding: 12px; background: var(--panel); max-width: 100%; min-width: 0; }
+.source-card h3 { margin: 0 0 6px; font-size: 1.1rem; }
+.privacy { margin: 0 0 8px; font-weight: 600; }
+/* a fixed-height box: whether the embed loads, fails or arrives late, the page below it never shifts */
+.embed-area { height: 360px; max-width: 100%; min-width: 0; overflow: hidden; overflow-wrap: anywhere; }
+.embed-status { margin: 0 0 6px; font-weight: 700; }
+.embed-mount { max-width: 100%; overflow: hidden; }
+.embed-mount iframe, .embed-mount .twitter-tweet { max-width: 100% !important; }
+.linkbtn { display: inline-flex; align-items: center; min-height: 44px; }
+.footer-nav { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.footer-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; font-weight: 700; }
+
+@media (max-width: 359px) {
+  .bigfoot .date-link { font-size: 0.75rem; padding: 0 2px; }
+}
+
+/* ---- desktop (about 900px and above): game column up to 1100px, stage about 60% of the viewport height ---- */
+@media (min-width: 900px) and (min-height: 501px) {
+  .bigfoot { --pose-h: 56px; }
+  .bigfoot .play-panel {
+    height: auto; min-height: 0; row-gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 32px auto var(--pose-h) auto;
+    grid-template-areas: "strip" "arena" "pose" "utils";
+  }
+  .arena { height: min(60svh, calc(100svh - var(--hdr-h) - 190px)); max-height: none; min-height: 360px; }
+  .pose-row { justify-self: center; width: 240px; }
+  .utils { margin-top: 0; justify-content: center; }
+}
+
+/* ---- short landscape (844x390, 568x320): stage left ~75%, vertical POSE/utility rail right ~25% ---- */
+@media (orientation: landscape) and (max-height: 500px) {
+  .bigfoot { --hdr-h: 40px; --ctl-h: 34px; --pose-h: auto; --top: 2px; --bottom: 4px; }
+  .bigfoot .site-header { padding-top: env(safe-area-inset-top, 0px); }
+  .bigfoot .gn-link, .bigfoot .date-link, .bigfoot .others > summary { padding: 0 6px; }
+  .bigfoot .play-panel {
+    column-gap: 8px; row-gap: 6px;
+    grid-template-columns: minmax(0, 3fr) minmax(128px, 1fr);
+    grid-template-rows: auto minmax(60px, 1fr) auto;
+    grid-template-areas: "arena strip" "arena pose" "arena utils";
+  }
+  .strip { flex-direction: column; align-items: flex-start; gap: 0; min-height: 0; }
+  .hud-item { font-size: 0.9375rem; line-height: 1.3; }
+  .pose-row { align-self: stretch; }
+  .pose { min-height: 56px; height: 100%; font-size: 1.25rem; }
+  .utils { margin-top: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; }
+  .util { min-width: 0; padding: 0 6px; font-size: 0.875rem; }
+  .util .u-ico { display: none; }
+  #btn-sound { grid-column: 1 / -1; }
+  .cue { font-size: 1.0625rem; top: 6px; }
+  .arena { min-height: 200px; height: 100%; max-height: none; align-self: stretch; }
+  .bigfoot .play-panel { min-height: calc(100svh - var(--hdr-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--top) - var(--bottom)); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

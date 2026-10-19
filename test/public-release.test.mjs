@@ -81,7 +81,7 @@ test('sharing configuration: public pages carry the stable DATED production URL 
 
 test('preview build ignores pending candidates: both editions stay labeled preview, noindex, link-free; root is the latest preview candidate', () => {
   const m = JSON.parse(read(prev, 'build-manifest.json'));
-  assert.deepEqual([m.mode, m.root, m.releasedEditions, m.previewEditions], ['preview', 'preview-candidate', [], ['2026-10-17', '2026-10-18']]);
+  assert.deepEqual([m.mode, m.root, m.releasedEditions, m.previewEditions], ['preview', 'preview-candidate', [], ['2026-10-17', '2026-10-18', '2026-10-19']]);
 });
 
 test('game files are byte-identical in the public artifact: every non-template asset equals its source, and the shipped HTML only differs by the template placeholders', () => {

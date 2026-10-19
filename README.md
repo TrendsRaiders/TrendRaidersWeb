@@ -6,6 +6,8 @@ The repository also contains the *candidate* edition **30-Second KO** (`games/20
 
 The repository also contains a second *candidate*, **Fly the Simulation** (`games/2026-10-18/`, spec r1, UTC edition 2026-10-18): preview-only too, listed in `preview/registry.json` and never in `releases/registry.json`. See [docs/fly-the-simulation.md](docs/fly-the-simulation.md).
 
+The repository also contains a third *candidate*, **Bigfoot: Take Two** (`games/2026-10-19/`, spec r1, UTC edition 2026-10-19): preview-only, listed in `preview/registry.json` and not in `releases/registry.json`. See [docs/bigfoot-take-two.md](docs/bigfoot-take-two.md).
+
 ## Requirements and setup
 
 Node.js 20+. Dev dependencies (`typescript`, `playwright-core`, `@types/node`) are only for checks and browser tests; the build itself uses Node built-ins.
@@ -62,6 +64,8 @@ Details, coverage and limitations: [docs/thirty-second-ko.md](docs/thirty-second
 | `games/2026-10-17/js/engine.js` | Deterministic combat simulation (no DOM) |
 | `games/2026-10-18/js/engine.js` | Deterministic seven-seam course and collision rules (no DOM) |
 | `games/2026-10-18/js/{art,render,main,embed,share}.js` | Fly pixel sprites, canvas painter, controller, automatic embed (8 s), plain-text copy |
+| `games/2026-10-19/js/engine.js` | Deterministic one-button timing rules and the active clock (no DOM) |
+| `games/2026-10-19/js/{art,render,main,embed,share}.js` | Bigfoot pixel sprites, canvas painter, controller, automatic embed (6 s), share/copy |
 | `releases/registry.json` | Public-build editions: two pending release candidates (see docs/public-release-candidate.md) |
 | `preview/registry.json` | Preview-only candidates |
 | `scripts/` | Build CLI and library; Fly verifier, evidence capture and scripted player in `scripts/lib/` |

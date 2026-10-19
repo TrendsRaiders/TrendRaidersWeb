@@ -35,12 +35,12 @@ test('public build with an EMPTY registry fixture: root stays the scaffold and n
 
 test('preview build: adds the 2026-10-18 candidate and keeps the boxing candidate; nothing is released', () => {
   const man = JSON.parse(read(prev, 'build-manifest.json'));
-  assert.equal(man.mode, 'preview'); assert.deepEqual(man.releasedEditions, []); assert.deepEqual(man.previewEditions, ['2026-10-17', '2026-10-18']);
+  assert.equal(man.mode, 'preview'); assert.deepEqual(man.releasedEditions, []); assert.deepEqual(man.previewEditions, ['2026-10-17', '2026-10-18', '2026-10-19']);
   assert.equal(man.root, 'preview-candidate');
   for (const f of ['index.html', 'game.css', 'js/main.js', 'js/engine.js', 'js/art.js', 'js/render.js', 'js/embed.js', 'js/share.js']) assert.ok(existsSync(join(prev, 'games', '2026-10-18', f)), f);
   assert.equal(existsSync(join(prev, 'games', '2026-10-18', 'edition.json')), false, 'edition.json is build input only');
   assert.ok(existsSync(join(prev, 'games', '2026-10-17', 'index.html')), 'boxing preview route preserved');
-  assert.equal(read(prev, 'index.html'), read(prev, 'games/2026-10-18/index.html'), 'preview root opens the latest candidate');
+  assert.equal(read(prev, 'index.html'), read(prev, 'games/2026-10-19/index.html'), 'preview root opens the latest candidate (Bigfoot: Take Two, staged after Fly)');
   assert.ok(existsSync(join(prev, 'styles.css')), 'scaffold stylesheet still shipped');
   assert.doesNotMatch(read(prev, 'games/2026-10-18/index.html'), /\{\{/, 'no unfilled template placeholders');
 });

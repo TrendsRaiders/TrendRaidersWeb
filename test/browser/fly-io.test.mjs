@@ -177,10 +177,12 @@ test('reduced motion: scenery drift is off (static background) while the course 
   });
 });
 
-test('routes: preview root and direct route are the candidate, refresh/back/forward give a fresh focused Intro, boxing preview unaffected, honest 404', async () => {
+test('routes: preview root is the latest candidate (Bigfoot, staged after Fly), the Fly direct route works, refresh/back/forward give a fresh focused Intro, boxing preview unaffected, honest 404', async () => {
   const g = await open(env, { route: '/' });
   const { page } = g;
   try {
+    assert.equal(await page.title(), 'Bigfoot: Take Two — Preview (not released)', 'the preview root is the latest staged candidate');
+    await page.goto(env.host.origin + FLY);
     assert.equal(await page.title(), 'Fly the Simulation — Preview (not released)');
     assert.equal((await readSim(page)).state, 'intro');
     await start(page);
@@ -190,7 +192,7 @@ test('routes: preview root and direct route are the candidate, refresh/back/forw
     // navigate to the other preview via the date chooser, then Back/Forward
     await page.goto(env.host.origin + FLY);
     await page.click('details.others > summary');
-    await Promise.all([page.waitForURL(`${env.host.origin}/games/2026-10-17/`), page.click('details.others a')]);
+    await Promise.all([page.waitForURL(`${env.host.origin}/games/2026-10-17/`), page.click('details.others a[href="/games/2026-10-17/"]')]);
     assert.equal(await page.getAttribute('#app', 'data-state'), 'intro', 'boxing preview still loads and starts at its Intro');
     assert.match(await page.textContent('#game-title'), /30-Second KO/);
     await page.goBack();
@@ -201,7 +203,7 @@ test('routes: preview root and direct route are the candidate, refresh/back/forw
     await page.goForward();
     await page.waitForURL(`${env.host.origin}/games/2026-10-17/`);
     // honest 404s and trailing-slash redirect
-    const r404 = await page.goto(`${env.host.origin}/games/2026-10-19/`);
+    const r404 = await page.goto(`${env.host.origin}/games/2026-10-25/`);
     assert.equal(r404?.status(), 404);
     assert.match(await page.textContent('main'), /Page not found/);
     assert.equal(await page.locator('#game').count(), 0);
